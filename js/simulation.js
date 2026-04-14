@@ -61,6 +61,10 @@ export class Simulation {
     this.scanOverlayCooldown = 0;
     this.currentRobotPalette = 'PERLA';
     this.neutralAccentColor = 0x8fe7ff;
+    this.rayUpdateTimer = 0;
+    this.pathDrawTimer = 0;
+    this.nnDrawTimer = 0;
+    this.hudTimer = 0;
 
     this.nc = $('nc');
     this.nx2 = this.nc.getContext('2d');
@@ -276,10 +280,9 @@ export class Simulation {
     );
 
     this.rayLines = this.rayAngs.map((a, i) => {
-      const g = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(0, 0, 4),
-      ]);
+      const positions = new Float32Array([0, 0, 0, 0, 0, 4]);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       const l = new THREE.Line(g, this.rayMats[i]);
       this.rayGrp.add(l);
       return l;
@@ -300,15 +303,14 @@ export class Simulation {
         5.5
       );
       const rad = deg2rad(this.robotController.robotAngle + a);
+      const px = Math.sin(rad) * d;
+      const pz = Math.cos(rad) * d;
+      const pos = this.rayLines[i].geometry.getAttribute('position');
 
-      this.rayLines[i].geometry.setFromPoints([
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(
-          Math.sin(rad) * d,
-          0,
-          Math.cos(rad) * d
-        ),
-      ]);
+      pos.array[3] = px;
+      pos.array[4] = 0;
+      pos.array[5] = pz;
+      pos.needsUpdate = true;
 
       this.rayMats[i].color.setHex(
         d < 1.1 ? 0xff3300 : d < 2.5 ? 0xffaa00 : 0x00ff88
@@ -386,7 +388,7 @@ export class Simulation {
   }
 
   _drawNN() {
-    if (!this.robotController.lastNN || !this.nc.width) return;
+    if (document.hidden || !this.robotController.lastNN || !this.nc.width) return;
 
     const { nx2: ctx, nc } = this;
     const cw = nc.width;
@@ -1001,6 +1003,10 @@ export class Simulation {
     }
 
     this.robotController.applyMovement(dt, this.robotController.curAct);
+    this.rayUpdateTimer += dt;
+    this.pathDrawTimer += dt;
+    this.nnDrawTimer += dt;
+    this.hudTimer += dt;
 
     // Animación de Saludo y Caminata
     if (this.isWaving && this.rP) {
@@ -1058,14 +1064,25 @@ export class Simulation {
     }
 
     this._updateCamera(dt);
-    this._updateRays();
+    if (this.rayUpdateTimer >= 0.05) {
+      this.rayUpdateTimer = 0;
+      this._updateRays();
+    }
     this._updateTrail(dt);
     this._updateScanOverlay(dt);
-    this._drawPath();
-    this._drawNN();
-
-    this._syncUI();
-    this._updateHUD();
+    if (this.pathDrawTimer >= 0.12) {
+      this.pathDrawTimer = 0;
+      this._drawPath();
+    }
+    if (this.nnDrawTimer >= 0.18) {
+      this.nnDrawTimer = 0;
+      this._drawNN();
+    }
+    if (this.hudTimer >= 0.1) {
+      this.hudTimer = 0;
+      this._syncUI();
+      this._updateHUD();
+    }
 
     this.renderer.render(this.scene, this.camera);
   }

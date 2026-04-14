@@ -147,6 +147,10 @@ import { Simulation } from './js/simulation.js';
 class Application {
   constructor() {
     this.headPose = { yaw: 0, pitch: 0, roll: 0 };
+    this.isLowPowerDevice =
+      window.matchMedia('(pointer: coarse)').matches ||
+      Math.min(window.innerWidth, window.innerHeight) < 720 ||
+      (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
 
     // Renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -155,10 +159,13 @@ class Application {
       powerPreference: 'high-performance',
     });
 
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    const targetPixelRatio = this.isLowPowerDevice ? 1.15 : 1.6;
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, targetPixelRatio));
     this.renderer.setClearColor(0xffffff, 1);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = this.isLowPowerDevice
+      ? THREE.PCFShadowMap
+      : THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.92;
 

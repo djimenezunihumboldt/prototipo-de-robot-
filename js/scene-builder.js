@@ -50,7 +50,7 @@ export class SceneBuilder {
     const sun = new THREE.DirectionalLight(0xc0d8ff, 1.1);
     sun.position.set(12, 24, 14);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.left = -32;
     sun.shadow.camera.right = 32;
     sun.shadow.camera.bottom = -32;
