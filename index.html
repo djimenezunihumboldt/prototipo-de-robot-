@@ -154,6 +154,13 @@ class Application {
       (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
     this.qualityMode = this.isLowPowerDevice ? 'baja' : 'alta';
     this.fxTimer = 0;
+    this.fpsEMA = 60;
+    this.lastPerfTs = 0;
+    this.lowPerfTime = 0;
+    this.highPerfTime = 0;
+    this.autoSwitchCooldown = 0;
+    this.autoPerfPausedUntil = 0;
+    this.qualityAutoSwitch = false;
 
     // Renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -281,6 +288,7 @@ class Application {
   _setupAnimationLoop() {
     const loop = (ts) => {
       requestAnimationFrame(loop);
+      this._monitorPerformance(ts);
       this.simulation.loop(ts);
 
       const t = ts * 0.001;
@@ -306,6 +314,61 @@ class Application {
     };
 
     requestAnimationFrame(loop);
+  }
+
+  _monitorPerformance(ts) {
+    if (document.hidden) return;
+
+    if (!this.lastPerfTs) {
+      this.lastPerfTs = ts;
+      return;
+    }
+
+    const dt = (ts - this.lastPerfTs) * 0.001;
+    this.lastPerfTs = ts;
+    if (dt <= 0 || dt > 1) return;
+
+    const fps = 1 / dt;
+    this.fpsEMA = this.fpsEMA * 0.9 + fps * 0.1;
+    this.autoSwitchCooldown = Math.max(0, this.autoSwitchCooldown - dt);
+
+    if (ts < this.autoPerfPausedUntil || this.autoSwitchCooldown > 0) {
+      return;
+    }
+
+    const lowThreshold = 28;
+    const recoverThreshold = 52;
+
+    if (this.qualityMode === 'alta') {
+      if (this.fpsEMA < lowThreshold) {
+        this.lowPerfTime += dt;
+      } else {
+        this.lowPerfTime = Math.max(0, this.lowPerfTime - dt * 0.6);
+      }
+      this.highPerfTime = 0;
+
+      if (this.lowPerfTime > 2.4) {
+        this.lowPerfTime = 0;
+        this.autoSwitchCooldown = 8;
+        this.applyQualityMode('baja', true, true);
+      }
+      return;
+    }
+
+    if (this.isLowPowerDevice) return;
+
+    if (this.fpsEMA > recoverThreshold) {
+      this.highPerfTime += dt;
+    } else {
+      this.highPerfTime = Math.max(0, this.highPerfTime - dt * 0.4);
+    }
+    this.lowPerfTime = 0;
+
+    if (this.highPerfTime > 8) {
+      this.highPerfTime = 0;
+      this.autoSwitchCooldown = 10;
+      this.applyQualityMode('alta', true, true);
+    }
   }
 
   _animateRobot(t, robotController) {
@@ -495,8 +558,9 @@ class Application {
     window.dispatchEvent(new Event('resize'));
   }
 
-  applyQualityMode(mode = 'alta', silent = false) {
+  applyQualityMode(mode = 'alta', silent = false, autoSwitch = false) {
     this.qualityMode = mode === 'baja' ? 'baja' : 'alta';
+    this.qualityAutoSwitch = !!autoSwitch;
 
     if (this.qualityMode === 'baja') {
       this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1));
@@ -519,11 +583,12 @@ class Application {
 
     const b = document.getElementById('btn-quality');
     if (b) {
+      const autoTag = this.qualityAutoSwitch ? ' AUTO' : '';
       if (this.qualityMode === 'baja') {
-        b.textContent = 'CALIDAD: BAJA';
+        b.textContent = 'CALIDAD: BAJA' + autoTag;
         b.classList.add('warn');
       } else {
-        b.textContent = 'CALIDAD: ALTA';
+        b.textContent = 'CALIDAD: ALTA' + autoTag;
         b.classList.remove('warn');
       }
     }
@@ -531,7 +596,11 @@ class Application {
 
   toggleQuality() {
     const next = this.qualityMode === 'alta' ? 'baja' : 'alta';
-    this.applyQualityMode(next);
+    this.lowPerfTime = 0;
+    this.highPerfTime = 0;
+    this.autoSwitchCooldown = 6;
+    this.autoPerfPausedUntil = performance.now() + 30000;
+    this.applyQualityMode(next, false, false);
   }
 }
 
