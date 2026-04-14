@@ -40,6 +40,7 @@ export const distance = (x1, z1, x2, z2) =>
 // ═══════════════════════════════════════════════════════
 export const CONFIG = {
   GRID_SIZE: 26,
+  PERF_LEVEL: 'high',
   CHARGE_STATION: { x: 14, z: 10 },
   CHARGE_STATION_2: { x: 3, z: 20 },
   ROBOT_RADIUS: 0.38,

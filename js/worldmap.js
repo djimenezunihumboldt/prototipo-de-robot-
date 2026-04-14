@@ -52,17 +52,20 @@ export class WorldMap {
   canMoveTo(wx, wz) {
     const GS = CONFIG.GRID_SIZE;
     const R = CONFIG.ROBOT_RADIUS + CONFIG.COLLISION_MARGIN;
+    const highPerf = CONFIG.PERF_LEVEL !== 'low';
 
     if (wx < R || wz < R || wx > GS - 1 - R || wz > GS - 1 - R) return false;
 
     // Muestreo radial más denso para evitar traspasar esquinas y bordes
     const checks = [[wx, wz]];
 
-    // Capas adicionales de detección cercana (más sensible)
-    const rings = [R * 0.3, R * 0.5, R * 0.7, R * 0.82, R];
+    // En modo low usamos menos anillos y menos ángulos para mejorar FPS.
+    const rings = highPerf
+      ? [R * 0.3, R * 0.5, R * 0.7, R * 0.82, R]
+      : [R * 0.55, R * 0.82, R];
+    const angleStep = highPerf ? 15 : 30;
     for (const rr of rings) {
-      // Incrementar granularidad: de cada 30° a cada 15° para mejor cobertura
-      for (let a = 0; a < 360; a += 15) {
+      for (let a = 0; a < 360; a += angleStep) {
         const rad = (a * Math.PI) / 180;
         checks.push([wx + Math.cos(rad) * rr, wz + Math.sin(rad) * rr]);
       }
@@ -79,9 +82,11 @@ export class WorldMap {
     const r = (ang * Math.PI) / 180;
     const sx = Math.sin(r);
     const sz = Math.cos(r);
+    const highPerf = CONFIG.PERF_LEVEL !== 'low';
 
-    // Paso más pequeño (0.015) para detección más precisa de muros
-    const step = CONFIG.COLLISION_STEP * 0.5; // 0.015m steps
+    const step = highPerf
+      ? CONFIG.COLLISION_STEP * 0.6
+      : CONFIG.COLLISION_STEP * 1.3;
     for (let d = step; d <= max; d += step) {
       if (!this.canMoveTo(wx + sx * d, wz + sz * d)) return d;
     }

@@ -156,25 +156,6 @@ export class SceneBuilder {
           acc.position.set(x, h * 0.8, z);
         sc.add(acc);
       }
-
-      // Colisores expandidos invisibles para mejor detección
-      // Capa 1: colisión cercana (0.5m alrededor del muro)
-      const collider1 = new THREE.Mesh(
-        new THREE.BoxGeometry(1.94, h * 2.5, 1.94),
-        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 })
-      );
-      collider1.position.set(x, h, z);
-      collider1.userData.isWallCollider = true;
-      sc.add(collider1);
-
-      // Capa 2: colisión media (1.2m alrededor para sensor avanzado)
-      const collider2 = new THREE.Mesh(
-        new THREE.BoxGeometry(3.34, h * 2.5, 3.34),
-        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 })
-      );
-      collider2.position.set(x, h, z);
-      collider2.userData.isWallSensorZone = true;
-      sc.add(collider2);
     });
   }
 

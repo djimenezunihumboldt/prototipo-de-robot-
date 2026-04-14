@@ -843,6 +843,7 @@ export class Simulation {
   setPerformanceMode(mode = 'alta', silent = false) {
     this.performanceMode = mode === 'baja' ? 'baja' : 'alta';
     const low = this.performanceMode === 'baja';
+    CONFIG.PERF_LEVEL = low ? 'low' : 'high';
 
     this.rayUpdateInterval = low ? 0.12 : 0.05;
     this.pathDrawInterval = low ? 0.24 : 0.12;
