@@ -6,6 +6,10 @@ export const VoiceModule = (() => {
   let enabled = false;
   let busy = false;
   const queue = [];
+  const synth = 'speechSynthesis' in window ? window.speechSynthesis : null;
+  let voicesReady = false;
+  let primeDone = false;
+  let retryTimer = null;
 
   const PHRASES = {
     saludo: [
@@ -118,6 +122,34 @@ export const VoiceModule = (() => {
     if (!busy) process();
   }
 
+  function updateButton() {
+    const btn = document.getElementById('vbtn');
+    if (!btn) return;
+    btn.textContent = enabled ? '[ VOZ ON ]' : '[ VOZ OFF ]';
+    btn.style.color = enabled ? '#00d4ff' : '#2a5070';
+  }
+
+  function getVoicesSafe() {
+    if (!synth) return [];
+    const voices = synth.getVoices() || [];
+    if (voices.length) voicesReady = true;
+    return voices;
+  }
+
+  function unlock() {
+    if (!synth) return;
+    primeDone = true;
+    synth.resume();
+    getVoicesSafe();
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+    if (enabled && queue.length && !busy) {
+      process();
+    }
+  }
+
   function process() {
     if (!queue.length || !enabled) {
       busy = false;
@@ -125,16 +157,16 @@ export const VoiceModule = (() => {
       return;
     }
 
-    if (!('speechSynthesis' in window)) {
+    if (!synth) {
       setTimeout(process, 2500);
       return;
     }
 
-    window.speechSynthesis.resume();
-    const voices = window.speechSynthesis.getVoices();
+    synth.resume();
+    const voices = getVoicesSafe();
     if (!voices.length) {
       busy = false;
-      setTimeout(process, 250);
+      retryTimer = setTimeout(process, 350);
       return;
     }
 
@@ -142,7 +174,7 @@ export const VoiceModule = (() => {
     const text = queue.shift();
     show(text);
 
-    window.speechSynthesis.cancel();
+    synth.cancel();
 
     const utt = new SpeechSynthesisUtterance(text);
     const esVoices = voices.filter((v) => (v.lang || '').startsWith('es'));
@@ -153,18 +185,35 @@ export const VoiceModule = (() => {
       /natural|neural|online|españa|mexico|méxico/i.test(v.name)
     );
 
-    utt.voice = expressiveVoice || naturalVoice || esVoices[0] || voices[0] || null;
+    const selected = expressiveVoice || naturalVoice || esVoices[0] || voices[0] || null;
+    if (selected) {
+      utt.voice = selected;
+      if (selected.lang) utt.lang = selected.lang;
+    } else {
+      utt.lang = 'es-ES';
+    }
     utt.rate = 0.92;
     utt.pitch = 0.95;
     utt.volume = 1;
-    utt.lang = 'es-ES';
+    utt.onstart = () => {
+      busy = true;
+    };
     utt.onend = () => setTimeout(process, 300);
     utt.onerror = () => {
       busy = false;
       hide();
+      setTimeout(process, 350);
     };
 
-    window.speechSynthesis.speak(utt);
+    // En Chrome, un micro-delay tras cancel() mejora la fiabilidad.
+    setTimeout(() => {
+      try {
+        synth.speak(utt);
+      } catch {
+        busy = false;
+        hide();
+      }
+    }, 35);
   }
 
   const cooldowns = {};
@@ -204,38 +253,32 @@ export const VoiceModule = (() => {
       enabled = !enabled;
     }
 
-    const btn = document.getElementById('vbtn');
+    updateButton();
 
     if (enabled) {
-      if (btn) {
-        btn.textContent = '[ VOZ ON ]';
-        btn.style.color = '#00d4ff';
-      }
-
-      if (announce && 'speechSynthesis' in window) {
-        window.speechSynthesis.resume();
-        window.speechSynthesis.getVoices();
+      if (announce && synth) {
+        unlock();
         setTimeout(() => speak(pick('saludo')), 700);
       }
     } else {
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      if (synth) synth.cancel();
       queue.length = 0;
       busy = false;
       hide();
-
-      if (btn) {
-        btn.textContent = '[ VOZ OFF ]';
-        btn.style.color = '#2a5070';
-      }
     }
   }
 
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.onvoiceschanged = () => {
+  if (synth) {
+    synth.onvoiceschanged = () => {
+      getVoicesSafe();
       if (enabled && queue.length && !busy) {
         process();
       }
     };
+
+    // Pre-carga inicial de voces en navegadores que tardan en exponerlas.
+    setTimeout(() => getVoicesSafe(), 100);
+    setTimeout(() => getVoicesSafe(), 500);
   }
 
   return {
@@ -245,6 +288,13 @@ export const VoiceModule = (() => {
     clearCooldown,
     pick,
     toggle,
+    unlock,
+    get available() {
+      return !!synth;
+    },
+    get ready() {
+      return voicesReady || primeDone;
+    },
     get enabled() {
       return enabled;
     },

@@ -57,6 +57,8 @@
   </div>
 </div>
 
+<button class="pn" id="vbtn" onclick="window.appVoice.toggle()">[ VOZ OFF ]</button>
+
 <div class="pn" id="ps">
   <div class="pt"><div class="pdot"></div>SISTEMA T-800 v3</div>
   <div class="sr"><span class="sl">MODO</span><span class="sv g" id="st-ac">—</span></div>
@@ -272,6 +274,9 @@ class Application {
 
   _bindStartupActivation() {
     const start = () => {
+      if (this.voice && this.voice.unlock) {
+        this.voice.unlock();
+      }
       if (this.simulation) {
         this.simulation.announceStartup();
       }
