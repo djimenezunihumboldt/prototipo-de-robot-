@@ -127,6 +127,35 @@ export const VoiceModule = (() => {
     if (!btn) return;
     btn.textContent = enabled ? '[ VOZ ON ]' : '[ VOZ OFF ]';
     btn.style.color = enabled ? '#00d4ff' : '#2a5070';
+    updateStateChip();
+  }
+
+  function updateStateChip() {
+    const chip = document.getElementById('vstate');
+    if (!chip) return;
+
+    let text = 'VOZ: OFF';
+    let klass = 'off';
+
+    if (!synth) {
+      text = 'VOZ: NO DISPONIBLE';
+      klass = 'bad';
+    } else if (!enabled) {
+      text = 'VOZ: OFF';
+      klass = 'off';
+    } else if (busy) {
+      text = 'VOZ: HABLANDO';
+      klass = 'ok';
+    } else if (voicesReady || primeDone) {
+      text = 'VOZ: LISTA';
+      klass = 'ok';
+    } else {
+      text = 'VOZ: BLOQUEADA';
+      klass = 'warn';
+    }
+
+    chip.textContent = text;
+    chip.className = 'pn ' + klass;
   }
 
   function getVoicesSafe() {
@@ -141,6 +170,7 @@ export const VoiceModule = (() => {
     primeDone = true;
     synth.resume();
     getVoicesSafe();
+    updateStateChip();
     if (retryTimer) {
       clearTimeout(retryTimer);
       retryTimer = null;
@@ -158,6 +188,7 @@ export const VoiceModule = (() => {
     }
 
     if (!synth) {
+      updateStateChip();
       setTimeout(process, 2500);
       return;
     }
@@ -166,6 +197,7 @@ export const VoiceModule = (() => {
     const voices = getVoicesSafe();
     if (!voices.length) {
       busy = false;
+      updateStateChip();
       retryTimer = setTimeout(process, 350);
       return;
     }
@@ -197,11 +229,17 @@ export const VoiceModule = (() => {
     utt.volume = 1;
     utt.onstart = () => {
       busy = true;
+      updateStateChip();
     };
-    utt.onend = () => setTimeout(process, 300);
+    utt.onend = () => {
+      busy = false;
+      updateStateChip();
+      setTimeout(process, 300);
+    };
     utt.onerror = () => {
       busy = false;
       hide();
+      updateStateChip();
       setTimeout(process, 350);
     };
 
@@ -212,6 +250,7 @@ export const VoiceModule = (() => {
       } catch {
         busy = false;
         hide();
+        updateStateChip();
       }
     }, 35);
   }
@@ -265,12 +304,14 @@ export const VoiceModule = (() => {
       queue.length = 0;
       busy = false;
       hide();
+      updateStateChip();
     }
   }
 
   if (synth) {
     synth.onvoiceschanged = () => {
       getVoicesSafe();
+      updateStateChip();
       if (enabled && queue.length && !busy) {
         process();
       }
@@ -280,6 +321,8 @@ export const VoiceModule = (() => {
     setTimeout(() => getVoicesSafe(), 100);
     setTimeout(() => getVoicesSafe(), 500);
   }
+
+  setTimeout(() => updateStateChip(), 0);
 
   return {
     speak,

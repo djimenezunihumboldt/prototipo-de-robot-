@@ -117,6 +117,13 @@ input[type=range]{flex:1;height:2px;accent-color:var(--c-cyan);cursor:pointer}
 #vbtn{top:12px;left:50%;transform:translateX(-50%) translateY(52px);
   padding:4px 16px;font-size:9px;font-weight:700;border-radius:4px;
   letter-spacing:.07em;cursor:pointer;z-index:21;transition:all .15s}
+#vstate{top:12px;left:50%;transform:translateX(-50%) translateY(84px);
+  padding:4px 10px;font-size:8px;font-weight:700;border-radius:4px;
+  letter-spacing:.07em;z-index:21;pointer-events:none;color:#2a5070}
+#vstate.ok{color:#00d4ff;border-color:rgba(0,200,255,.5)}
+#vstate.warn{color:#ffaa00;border-color:rgba(255,170,0,.45)}
+#vstate.bad{color:#ff4466;border-color:rgba(255,68,102,.55)}
+#vstate.off{color:#2a5070}
 
 /* ── Legend ── */
 #pl{bottom:12px;left:50%;transform:translateX(-50%);
@@ -162,6 +169,7 @@ input[type=range]{flex:1;height:2px;accent-color:var(--c-cyan);cursor:pointer}
   #pi { top: auto; bottom: 142px; width: min(94vw, 420px); justify-content: center; }
   #eb { top: auto; bottom: 178px; }
   #vbtn { left: auto; right: 6px; top: 6px; transform: none; padding: 6px 10px; }
+  #vstate { left: auto; right: 6px; top: 40px; transform: none; padding: 5px 8px; }
   .hb { flex-wrap: wrap; }
   .hbtn { min-width: 31%; padding: 7px 2px; }
   .hbtn:hover::after, .hbtn:hover::before, .snr[title]::after, .ar[title]::after { display: none !important; }
