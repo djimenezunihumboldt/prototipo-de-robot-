@@ -82,6 +82,7 @@
   </div>
   <div class="hb">
     <button class="hbtn" id="btn-palette" title="Alterna acabado del robot entre blanco perla y titanio" onclick="window.appSimulation.toggleRobotPalette()">PALETA: PERLA</button>
+    <button class="hbtn" id="btn-quality" title="Cambia entre rendimiento alto y bajo para mejorar fluidez" onclick="window.appToggleQuality()">CALIDAD: ALTA</button>
   </div>
   <div class="hb">
     <button class="hbtn" id="btn-preset-directo" title="Ruta más directa, menos conservadora" onclick="window.appSimulation.applyAStarPreset('directo')">DIR</button>
@@ -151,6 +152,8 @@ class Application {
       window.matchMedia('(pointer: coarse)').matches ||
       Math.min(window.innerWidth, window.innerHeight) < 720 ||
       (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+    this.qualityMode = this.isLowPowerDevice ? 'baja' : 'alta';
+    this.fxTimer = 0;
 
     // Renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -242,6 +245,7 @@ class Application {
     this.simulation.fillLights = flLights;
     this.simulation.rP = robotParts;
     this.simulation.applyRobotPalette('perla', true);
+    this.applyQualityMode(this.qualityMode, true);
 
     this._bindStartupActivation();
 
@@ -279,21 +283,26 @@ class Application {
       requestAnimationFrame(loop);
       this.simulation.loop(ts);
 
-      // Animate lights
       const t = ts * 0.001;
-      this.simulation.fillLights.f1.position.set(
-        -8 + Math.sin(t * 0.18) * 2.5,
-        6,
-        6 + Math.cos(t * 0.14) * 2
-      );
-      this.simulation.fillLights.f2.position.set(
-        8 + Math.cos(t * 0.16) * 2.5,
-        5,
-        -8 + Math.sin(t * 0.19) * 2
-      );
+      const low = this.qualityMode === 'baja';
 
-      // Animate robot
-      this._animateRobot(t, this.simulation.robotController);
+      this.fxTimer += low ? 0.016 : 0.05;
+      if (!low || this.fxTimer >= 0.1) {
+        this.fxTimer = 0;
+
+        this.simulation.fillLights.f1.position.set(
+          -8 + Math.sin(t * 0.18) * 2.5,
+          6,
+          6 + Math.cos(t * 0.14) * 2
+        );
+        this.simulation.fillLights.f2.position.set(
+          8 + Math.cos(t * 0.16) * 2.5,
+          5,
+          -8 + Math.sin(t * 0.19) * 2
+        );
+
+        this._animateRobot(t, this.simulation.robotController);
+      }
     };
 
     requestAnimationFrame(loop);
@@ -485,6 +494,45 @@ class Application {
     // Initial resize
     window.dispatchEvent(new Event('resize'));
   }
+
+  applyQualityMode(mode = 'alta', silent = false) {
+    this.qualityMode = mode === 'baja' ? 'baja' : 'alta';
+
+    if (this.qualityMode === 'baja') {
+      this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1));
+      this.renderer.shadowMap.enabled = false;
+      this.renderer.toneMappingExposure = 0.9;
+    } else {
+      this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.isLowPowerDevice ? 1.25 : 1.6));
+      this.renderer.shadowMap.enabled = true;
+      this.renderer.shadowMap.type = this.isLowPowerDevice
+        ? THREE.PCFShadowMap
+        : THREE.PCFSoftShadowMap;
+      this.renderer.toneMappingExposure = 0.92;
+    }
+
+    this.renderer.setSize(innerWidth, innerHeight, false);
+
+    if (this.simulation && this.simulation.setPerformanceMode) {
+      this.simulation.setPerformanceMode(this.qualityMode, silent);
+    }
+
+    const b = document.getElementById('btn-quality');
+    if (b) {
+      if (this.qualityMode === 'baja') {
+        b.textContent = 'CALIDAD: BAJA';
+        b.classList.add('warn');
+      } else {
+        b.textContent = 'CALIDAD: ALTA';
+        b.classList.remove('warn');
+      }
+    }
+  }
+
+  toggleQuality() {
+    const next = this.qualityMode === 'alta' ? 'baja' : 'alta';
+    this.applyQualityMode(next);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -496,6 +544,7 @@ const app = new Application();
 // Export globals for HTML onclick handlers
 window.appSimulation = app.simulation;
 window.appVoice = VoiceModule;
+window.appToggleQuality = () => app.toggleQuality();
 </script>
 </body>
 </html>

@@ -61,10 +61,18 @@ export class Simulation {
     this.scanOverlayCooldown = 0;
     this.currentRobotPalette = 'PERLA';
     this.neutralAccentColor = 0x8fe7ff;
+    this.performanceMode = 'alta';
     this.rayUpdateTimer = 0;
     this.pathDrawTimer = 0;
     this.nnDrawTimer = 0;
     this.hudTimer = 0;
+    this.rayUpdateInterval = 0.05;
+    this.pathDrawInterval = 0.12;
+    this.nnDrawInterval = 0.18;
+    this.hudInterval = 0.1;
+    this.trailSpawnInterval = 0.2;
+    this.trailFadeStep = 0.011;
+    this.trailEnabled = true;
 
     this.nc = $('nc');
     this.nx2 = this.nc.getContext('2d');
@@ -321,10 +329,12 @@ export class Simulation {
   }
 
   _updateTrail(dt) {
+    if (!this.trailEnabled) return;
+
     this.trailT += dt;
 
     if (
-      this.trailT > 0.2 &&
+      this.trailT > this.trailSpawnInterval &&
       ['avanzar', 'explorar'].includes(this.robotController.curAct)
     ) {
       const m = this.trailPool[this.trailIdx % 60];
@@ -337,7 +347,7 @@ export class Simulation {
 
     this.trailMats.forEach((mat) => {
       if (mat.opacity > 0) {
-        mat.opacity = Math.max(0, mat.opacity - 0.011);
+        mat.opacity = Math.max(0, mat.opacity - this.trailFadeStep);
       }
     });
   }
@@ -345,10 +355,11 @@ export class Simulation {
   _drawPath() {
     const path = this.robotController.bfsPath || [];
     const max = this.pathPool.length;
+    const low = this.performanceMode === 'baja';
 
     for (let i = 0; i < max; i++) {
       const m = this.pathPool[i];
-      if (i < path.length) {
+      if (i < path.length && (!low || i % 2 === 0)) {
         const p = path[i];
         m.visible = true;
         m.position.set(p.x + 0.5, 0.12, p.z + 0.5);
@@ -388,6 +399,7 @@ export class Simulation {
   }
 
   _drawNN() {
+    if (this.performanceMode === 'baja') return;
     if (document.hidden || !this.robotController.lastNN || !this.nc.width) return;
 
     const { nx2: ctx, nc } = this;
@@ -828,6 +840,47 @@ export class Simulation {
     }
   }
 
+  setPerformanceMode(mode = 'alta', silent = false) {
+    this.performanceMode = mode === 'baja' ? 'baja' : 'alta';
+    const low = this.performanceMode === 'baja';
+
+    this.rayUpdateInterval = low ? 0.12 : 0.05;
+    this.pathDrawInterval = low ? 0.24 : 0.12;
+    this.nnDrawInterval = low ? 0.35 : 0.18;
+    this.hudInterval = low ? 0.18 : 0.1;
+    this.trailSpawnInterval = low ? 0.34 : 0.2;
+    this.trailFadeStep = low ? 0.02 : 0.011;
+    this.trailEnabled = !low;
+
+    if (this.rayGrp) {
+      this.rayGrp.visible = !low;
+    }
+
+    if (this.nc) {
+      this.nc.style.display = low ? 'none' : 'block';
+    }
+
+    const pnn = $('pnn');
+    if (pnn) {
+      pnn.style.display = low ? 'none' : 'block';
+    }
+
+    if (low) {
+      this.scanOverlayEnabled = false;
+      const bs = $('btn-scan');
+      if (bs) {
+        bs.textContent = '🗺 SCAN OFF';
+        bs.classList.remove('on');
+      }
+    }
+
+    if (!silent && this.voice.enabled) {
+      this.voice.speak(low
+        ? 'Modo de rendimiento bajo activado.'
+        : 'Modo de rendimiento alto activado.');
+    }
+  }
+
   addWall() {
     const GS = CONFIG.GRID_SIZE;
     const x = 2 + Math.floor(Math.random() * (GS - 4));
@@ -1064,21 +1117,21 @@ export class Simulation {
     }
 
     this._updateCamera(dt);
-    if (this.rayUpdateTimer >= 0.05) {
+    if (this.rayUpdateTimer >= this.rayUpdateInterval) {
       this.rayUpdateTimer = 0;
       this._updateRays();
     }
     this._updateTrail(dt);
     this._updateScanOverlay(dt);
-    if (this.pathDrawTimer >= 0.12) {
+    if (this.pathDrawTimer >= this.pathDrawInterval) {
       this.pathDrawTimer = 0;
       this._drawPath();
     }
-    if (this.nnDrawTimer >= 0.18) {
+    if (this.nnDrawTimer >= this.nnDrawInterval) {
       this.nnDrawTimer = 0;
       this._drawNN();
     }
-    if (this.hudTimer >= 0.1) {
+    if (this.hudTimer >= this.hudInterval) {
       this.hudTimer = 0;
       this._syncUI();
       this._updateHUD();
