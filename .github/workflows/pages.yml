@@ -1,6 +1,6 @@
 name: Deploy static site to Pages
 
-on:
+'on':
   push:
     branches:
       - main
