@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<!-- ═══════════════════════════════════════════════════════════════
+     T-800 IA NEURAL v3 — Robot 3D con Inteligencia Artificial
+     VERSIÓN REESTRUCTURADA Y MEJORADA
+     ═══════════════════════════════════════════════════════════════
+     MEJORAS IMPLEMENTADAS:
+     • Arquitectura modular (9 archivos JS + 1 CSS)
+     • Detección de obstáculos avanzada (rayos múltiples)
+     • Anti-oscilación mejorada (previene rotaciones infinitas)
+     • Cámara estabilizada (seguimiento suave)
+     • Navegación A* optimizada
+     • IA más inteligente (red neuronal mejorada)
+     • Código limpio y mantenible
+     ═══════════════════════════════════════════════════════════════ -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>T-800 IA Neural v3 — Robot 3D</title>
+<link rel="icon" href="data:,">
+
+<!-- ES Module importmap — Three.js r158 + TensorFlow.js -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"
+  }
+}
+</script>
+<!-- TensorFlow.js para redes neuronales avanzadas -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0"></script>
+
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<canvas id="canvas3d"></canvas>
+<div id="scan"></div>
+
+<div class="pn" id="eb">
+  <span class="ei" id="ei">🔵</span>
+  <div><div class="en" id="en">INICIALIZANDO</div><div class="es" id="es">El robot arranca solo. Haz click en cualquier botón para escuchar el saludo.</div></div>
+</div>
+
+<div class="pn" id="pi">
+  <div class="piDot" id="pi-dot" style="background:var(--c-cyan);box-shadow:0 0 6px var(--c-cyan)"></div>
+  <span id="pi-txt" style="color:var(--c-muted)">CALCULANDO RUTA...</span>
+</div>
+
+<div id="sb" class="pn">
+  <div class="st" id="speech-text">...</div>
+  <div class="sbar">
+    <span style="animation-delay:.00s"></span><span style="animation-delay:.05s"></span>
+    <span style="animation-delay:.10s"></span><span style="animation-delay:.15s"></span>
+    <span style="animation-delay:.20s"></span><span style="animation-delay:.08s"></span>
+    <span style="animation-delay:.13s"></span><span style="animation-delay:.18s"></span>
+  </div>
+</div>
+
+<div class="pn" id="ps">
+  <div class="pt"><div class="pdot"></div>SISTEMA T-800 v3</div>
+  <div class="sr"><span class="sl">MODO</span><span class="sv g" id="st-ac">—</span></div>
+  <div class="sr"><span class="sl">PRESET</span><span class="sv" id="st-pr">BAL</span></div>
+  <div class="sr"><span class="sl">OBJETIVO</span><span class="sv" id="st-tg">—</span></div>
+  <div class="sr"><span class="sl">ORIENTACIÓN</span><span class="sv" id="st-an">0°</span></div>
+  <div class="sr"><span class="sl">EVITADOS</span><span class="sv a" id="st-ev">0</span></div>
+  <div class="sg">
+    <div class="sb"><div class="sbv" id="st-st">0</div><div class="sbl">PASOS</div></div>
+    <div class="sb"><div class="sbv" id="st-ex">0%</div><div class="sbl">MAPEADO</div></div>
+  </div>
+  <div class="bb"><div class="bf" id="bf" style="width:80%;background:var(--c-green)"></div></div>
+  <div class="hb">
+    <button class="hbtn" id="btn-auto" title="Inicia o pausa el robot - Usa el mismo botón para continuar" onclick="window.appSimulation.toggleAuto()">▶ PLAY</button>
+    <button class="hbtn" title="Reinicia la simulación completa - Vuelve al estado inicial" onclick="window.appSimulation.reset()">⟳ RST</button>
+    <button class="hbtn warn" title="Agrega obstáculos aleatorios - Prueba los sistemas de evitación" onclick="window.appSimulation.addWall()">+ MURO</button>
+    <button class="hbtn warn" title="Quita el último obstáculo agregado" onclick="window.appSimulation.removeWall()">- MURO</button>
+  </div>
+  <div class="hb">
+    <button class="hbtn" id="btn-goal" title="Genera un nuevo punto de llegada y recalcula la ruta" onclick="window.appSimulation.newGoal()">◎ META</button>
+    <button class="hbtn" id="btn-roundtrip" title="Activa/desactiva ida y vuelta automática entre salida y llegada" onclick="window.appSimulation.toggleRoundTrip()">⇄ IDA/VTA OFF</button>
+    <button class="hbtn" id="btn-scan" title="Muestra u oculta el mapa de celdas caminables escaneadas" onclick="window.appSimulation.toggleScanOverlay()">🗺 SCAN ON</button>
+  </div>
+  <div class="hb">
+    <button class="hbtn" id="btn-palette" title="Alterna acabado del robot entre blanco perla y titanio" onclick="window.appSimulation.toggleRobotPalette()">PALETA: PERLA</button>
+  </div>
+  <div class="hb">
+    <button class="hbtn" id="btn-preset-directo" title="Ruta más directa, menos conservadora" onclick="window.appSimulation.applyAStarPreset('directo')">DIR</button>
+    <button class="hbtn on" id="btn-preset-balance" title="Balance entre seguridad y velocidad" onclick="window.appSimulation.applyAStarPreset('balance')">BAL</button>
+    <button class="hbtn" id="btn-preset-seguro" title="Evita riesgos y muros con mayor margen" onclick="window.appSimulation.applyAStarPreset('seguro')">SEG</button>
+  </div>
+</div>
+
+<div class="pn" id="psr">
+  <div class="pt"><div class="pdot"></div>SENSORES (Modifica valores en tiempo real)</div>
+  <div class="snr" title="Visión - Detecta luz ambiental y obstáculos"><span class="sni">👁</span><span class="snl">VISIÓN</span><input type="range" id="s-luz" min="0" max="100" value="70"><span class="snv" id="v-luz">70</span></div>
+  <div class="snr" title="Audio - Detecta sonidos para navegar"><span class="sni">📻</span><span class="snl">AUDIO</span><input type="range" id="s-son" min="0" max="100" value="12"><span class="snv" id="v-son">12</span></div>
+  <div class="snr" title="Radar - Detecta distancia a obstáculos"><span class="sni">📡</span><span class="snl">RADAR</span><input type="range" id="s-dis" min="0" max="100" value="90"><span class="snv" id="v-dis">90</span></div>
+  <div class="snr" title="Térmica - Detecta fuentes de calor"><span class="sni">🌡</span><span class="snl">TÉRMICA</span><input type="range" id="s-tmp" min="0" max="100" value="35"><span class="snv" id="v-tmp">35</span></div>
+  <div class="snr" title="Energía - Estado de la batería del robot"><span class="sni">⚡</span><span class="snl">ENERGÍA</span><input type="range" id="s-bat" min="0" max="100" value="90"><span class="snv" id="v-bat">90</span></div>
+  <div class="snr" title="Riesgo A* - Más alto evita mejor zonas peligrosas (más seguro, menos directo)"><span class="sni">🛡</span><span class="snl">RIESGO A*</span><input type="range" id="s-risk" min="0" max="100" value="70"><span class="snv" id="v-risk">70</span></div>
+  <div class="snr" title="Muro A* - Más alto evita pasar cerca de paredes y esquinas"><span class="sni">🧱</span><span class="snl">MURO A*</span><input type="range" id="s-wall" min="0" max="100" value="65"><span class="snv" id="v-wall">65</span></div>
+</div>
+
+<div class="pn" id="pnn">
+  <div class="pt"><div class="pdot"></div>RED NEURONAL TENSORFLOW.JS — ARQUITECTURA AVANZADA</div>
+  <canvas id="nc" height="128"></canvas>
+</div>
+
+<div class="pn" id="pac">
+  <div class="pt"><div class="pdot"></div>PROTOCOLOS ACTIVOS (Confianza en %)</div>
+  <div class="ar" id="act-avanzar" title="Movimiento hacia adelante basado en la ruta A*"><div class="aled"></div><span class="an">► AVANZAR</span><span class="ap" id="ap-avanzar">—</span></div>
+  <div class="ar" id="act-girar-izq" title="Rotación a la izquierda para evasión o reorientación"><div class="aled"></div><span class="an">◄ GIRAR IZQ</span><span class="ap" id="ap-girar-izq">—</span></div>
+  <div class="ar" id="act-girar-der" title="Rotación a la derecha para evasión o reorientación"><div class="aled"></div><span class="an">► GIRAR DER</span><span class="ap" id="ap-girar-der">—</span></div>
+  <div class="ar" id="act-retroceder" title="Movimiento hacia atrás cuando hay peligro inminente"><div class="aled"></div><span class="an">◄ RETROCEDER</span><span class="ap" id="ap-retroceder">—</span></div>
+  <div class="ar" id="act-explorar" title="Exploración de zonas no mapeadas del mundo"><div class="aled"></div><span class="an">◉ EXPLORAR</span><span class="ap" id="ap-explorar">—</span></div>
+  <div class="ar" id="act-responder" title="Comunicación y síntesis de voz en español"><div class="aled"></div><span class="an">▶ COMUNICAR</span><span class="ap" id="ap-responder">—</span></div>
+</div>
+
+<div class="pn" id="pl">
+  <div class="lg"><div class="lgsq" style="background:#1a2840"></div>PASILLO</div>
+  <div class="lg"><div class="lgsq" style="background:#334455"></div>MURO</div>
+  <div class="lg"><div class="lgsq" style="background:#005588;opacity:.8"></div>VACÍO (DISPONIBLE)</div>
+  <div class="lg"><div class="lgsq" style="background:#00aaff;opacity:.8"></div>SCAN LIBRE</div>
+  <div class="lg"><div class="lgsq" style="background:#00d4ff;opacity:.9"></div>CAMINO VISITADO</div>
+  <div class="lg"><div class="lgsq" style="background:#ff3355;opacity:.7"></div>SCAN BLOQ (RIESGO)</div>
+  <div class="lg"><div class="lgsq" style="background:#ff4466;opacity:.8"></div>PELIGRO</div>
+  <div class="lg"><div class="lgsq" style="background:#ff9900;opacity:.7"></div>ESTELA</div>
+  <div class="lg"><div class="lgsq" style="background:#00aaff;opacity:.7"></div>RUTA A*</div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { CONFIG } from './js/utils.js';
+import { WorldMap } from './js/worldmap.js';
+import { AStarPathfinder } from './js/pathfinder.js';
+import { NeuralNet } from './js/neural-network.js';
+import { VoiceModule } from './js/voice.js';
+import { SceneBuilder } from './js/scene-builder.js';
+import { RobotBuilder } from './js/robot-builder.js';
+import { RobotController } from './js/robot-controller.js';
+import { Simulation } from './js/simulation.js';
+
+// ═══════════════════════════════════════════════════════════
+// INICIALIZACIÓN
+// ═══════════════════════════════════════════════════════════
+
+class Application {
+  constructor() {
+    this.headPose = { yaw: 0, pitch: 0, roll: 0 };
+
+    // Renderer
+    this.renderer = new THREE.WebGLRenderer({
+      canvas: document.getElementById('canvas3d'),
+      antialias: true,
+      powerPreference: 'high-performance',
+    });
+
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.setClearColor(0xffffff, 1);
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 0.92;
+
+    // Scene
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0xffffff);
+    this.scene.fog = new THREE.FogExp2(0xffffff, 0.026);
+
+    // Camera
+    this.camera = new THREE.PerspectiveCamera(
+      52,
+      1,
+      0.05,
+      160
+    );
+    this.camera.position.set(4, 9, 13);
+
+    // World
+    this.world = new WorldMap();
+
+    // Scene building
+    const sb = new SceneBuilder(this.scene);
+    const flLights = sb.buildLights();
+    sb.buildFloor(this.world);
+    sb.buildChargeStation();
+    sb.buildWalls(this.world);
+
+    // Pools
+    const pathPool = sb.buildPathPool(70);
+    const { pool: trailPool, mats: trailMats } = sb.buildTrailPool(60);
+
+    // Robot
+    const rb = new RobotBuilder(sb);
+    const { root: robotRoot, P: robotParts } = rb.build();
+    this.scene.add(robotRoot);
+
+    // Pathfinder
+    const pathfinder = new AStarPathfinder(this.world);
+
+    // AI
+    const nn = new NeuralNet();
+    const voice = VoiceModule;
+    this.voice = voice;
+    this.voice.toggle(true, false);
+
+    // Robot Controller
+    const robotController = new RobotController(
+      robotRoot,
+      this.world,
+      pathfinder,
+      nn,
+      voice
+    );
+
+    robotController.curAct = 'avanzar';
+    robotController.rP = robotParts;
+
+    // Simulation
+    this.simulation = new Simulation(
+      this.scene,
+      this.camera,
+      this.renderer,
+      this.world,
+      pathfinder,
+      robotRoot,
+      robotController,
+      nn,
+      voice,
+      pathPool,
+      trailPool,
+      trailMats
+    );
+
+    this.simulation.fillLights = flLights;
+    this.simulation.rP = robotParts;
+    this.simulation.applyRobotPalette('perla', true);
+
+    this._bindStartupActivation();
+
+    this._setupAnimationLoop();
+    this._setupResizeHandler();
+
+    setTimeout(() => {
+      if (!this.simulation.autoMode) {
+        this.simulation.toggleAuto();
+      }
+      // Activar saludo automático después de que el robot esté lista
+      setTimeout(() => {
+        this.simulation.announceStartup();
+      }, 1500);
+    }, 700);
+  }
+
+  _bindStartupActivation() {
+    const start = () => {
+      if (this.simulation) {
+        this.simulation.announceStartup();
+      }
+    };
+
+    ['pointerdown', 'keydown', 'touchstart'].forEach((eventName) => {
+      document.addEventListener(eventName, start, {
+        once: true,
+        capture: true,
+      });
+    });
+  }
+
+  _setupAnimationLoop() {
+    const loop = (ts) => {
+      requestAnimationFrame(loop);
+      this.simulation.loop(ts);
+
+      // Animate lights
+      const t = ts * 0.001;
+      this.simulation.fillLights.f1.position.set(
+        -8 + Math.sin(t * 0.18) * 2.5,
+        6,
+        6 + Math.cos(t * 0.14) * 2
+      );
+      this.simulation.fillLights.f2.position.set(
+        8 + Math.cos(t * 0.16) * 2.5,
+        5,
+        -8 + Math.sin(t * 0.19) * 2
+      );
+
+      // Animate robot
+      this._animateRobot(t, this.simulation.robotController);
+    };
+
+    requestAnimationFrame(loop);
+  }
+
+  _animateRobot(t, robotController) {
+    const P = this.simulation.rP;
+    if (!P) return;
+
+    const moving = [
+      'avanzar',
+      'explorar',
+      'retroceder',
+    ].includes(robotController.curAct);
+
+    const walkT = t * (moving ? 3.6 : 0.36);
+    const sw = moving
+      ? Math.sin(walkT) * 0.44
+      : Math.sin(walkT * 0.3) * 0.022;
+
+    // Legs
+    P.lLeg.upper.rotation.x = sw * 0.9;
+    P.rLeg.upper.rotation.x = -sw * 0.9;
+    P.lLeg.knee.rotation.x = Math.max(0, -sw) * 0.54;
+    P.rLeg.knee.rotation.x = Math.max(0, sw) * 0.54;
+
+    // Arms
+    P.lArm.upper.rotation.x = -sw * 0.6;
+    P.rArm.upper.rotation.x = sw * 0.6;
+    P.lArm.elbow.rotation.x = 0.12 + Math.abs(sw) * 0.36;
+    P.rArm.elbow.rotation.x = 0.12 + Math.abs(sw) * 0.36;
+
+    if (this.simulation.isWaving) {
+      P.rArm.upper.rotation.x = -Math.PI / 1.25;
+      P.rArm.upper.rotation.z = -0.4;
+      P.rArm.elbow.rotation.x = 0.6 + Math.sin(t * 14) * 0.5;
+      this.headPose.yaw = Math.sin(t * 3) * 0.25;
+    } else {
+      P.rArm.upper.rotation.z = 0;
+    }
+
+    // Body bob
+    const bob = moving ? Math.abs(Math.sin(walkT)) * 0.02 : 0;
+    P.torsoG.position.y = 0.98 + bob;
+    P.torsoG.rotation.z = sw * 0.025;
+    P.hipsG.position.y = 0.58 + bob * 0.4;
+    P.headG.position.y = 1.92 + bob * 0.65;
+    P.spineG.position.y = 0.58 + bob * 0.3;
+
+    // Head articulation: smoother and reactive to locomotion/turning.
+    const turnSign =
+      robotController.curAct === 'girar-izq'
+        ? -1
+        : robotController.curAct === 'girar-der'
+          ? 1
+          : 0;
+    const speedN = Math.min(1, Math.abs(robotController.robotVel) / CONFIG.SPEED);
+
+    const targetYaw =
+      turnSign * 0.22 +
+      Math.sin(t * (moving ? 2.8 : 1.2)) * (moving ? 0.065 : 0.03);
+    const targetPitch =
+      (moving ? -0.04 : -0.01) +
+      Math.sin(walkT * 2.0) * (0.018 + speedN * 0.022);
+    const targetRoll = turnSign * 0.065 + sw * 0.06;
+
+    const ease = moving ? 0.16 : 0.1;
+    this.headPose.yaw += (targetYaw - this.headPose.yaw) * ease;
+    this.headPose.pitch += (targetPitch - this.headPose.pitch) * ease;
+    this.headPose.roll += (targetRoll - this.headPose.roll) * ease;
+
+    const headNode = P.headPivot || P.headG;
+    headNode.rotation.y = this.headPose.yaw;
+    headNode.rotation.x = this.headPose.pitch;
+    headNode.rotation.z = this.headPose.roll;
+
+    // Action colors
+    const ACOL = {
+      avanzar: 0x00aaff,
+      'girar-izq': 0xffaa00,
+      'girar-der': 0xffa000,
+      retroceder: 0xff4400,
+      explorar: 0x00ccff,
+      responder: 0x00ffaa,
+      detener: this.simulation?.neutralAccentColor || 0x334455,
+    };
+
+    const ac = ACOL[robotController.curAct] || 0x00aaff;
+
+    // Eyes
+    const eRate =
+      robotController.curAct === 'responder' ? 9 : 1.8;
+    const eI = 3.5 + Math.sin(t * eRate) * 2.5;
+    P.eyeL.material.emissiveIntensity = eI;
+    P.eyeR.material.emissiveIntensity = eI;
+    P.eyeLights.forEach((l) => {
+      l.intensity = 1.6 + Math.sin(t * eRate) * 0.7;
+      l.color.setHex(ac);
+    });
+
+    // Antenna
+    P.antBall.material.emissive.setHex(ac);
+    P.antBall.material.color.setHex(ac);
+    P.antBall.material.emissiveIntensity =
+      3 +
+      Math.sin(
+        t * (robotController.curAct === 'responder' ? 10 : 2.5)
+      ) *
+        2;
+    P.antLight.color.setHex(ac);
+    P.antLight.intensity = 0.8 + Math.sin(t * 2) * 0.4;
+
+    // LEDs
+    P.leds.forEach((led, i) => {
+      led.material.emissiveIntensity =
+        0.7 + Math.sin(t * 2.5 + i * 0.65) * 1.1;
+    });
+
+    // Mouth
+    P.mouthBars.forEach((mb) => {
+      mb.material.emissiveIntensity =
+        robotController.curAct === 'responder'
+          ? 1.5 + Math.sin(t * 9) * 2.5
+          : 0.9;
+    });
+
+    P.glow.color.setHex(ac);
+    if (robotController.curAct === 'detener') {
+      P.glow.intensity = 0.72 + Math.sin(t * 1.5) * 0.18;
+    } else {
+      P.glow.intensity = 1.4 + Math.sin(t * 2) * 0.3;
+    }
+
+    // Emotion badge
+    const EMO = {
+      avanzar: {
+        i: '🔵',
+        n: 'NAVEGANDO',
+        s: 'Siguiendo ruta A* calculada',
+      },
+      'girar-izq': {
+        i: '🔵',
+        n: 'REORIENTANDO',
+        s: 'Ajustando dirección hacia la izquierda',
+      },
+      'girar-der': {
+        i: '🔵',
+        n: 'REORIENTANDO',
+        s: 'Ajustando dirección hacia la derecha',
+      },
+      retroceder: {
+        i: '🔴',
+        n: 'PELIGRO',
+        s: 'Obstáculo crítico — retrocediendo',
+      },
+      explorar: {
+        i: '🔵',
+        n: 'EXPLORANDO',
+        s: 'Buscando zonas sin mapear',
+      },
+      responder: {
+        i: '🟢',
+        n: 'COMUNICANDO',
+        s: 'Señal procesada — respondiendo',
+      },
+      detener: {
+        i: '⚫',
+        n: 'SIN ENERGÍA',
+        s: 'Batería agotada — sistema parado',
+      },
+    };
+
+    const emo = EMO[robotController.curAct] || EMO.avanzar;
+    document.getElementById('ei').textContent = emo.i;
+    document.getElementById('en').textContent = emo.n;
+    document.getElementById('es').textContent = emo.s;
+  }
+
+  _setupResizeHandler() {
+    window.addEventListener('resize', () => {
+      const w = innerWidth;
+      const h = innerHeight;
+
+      this.renderer.setSize(w, h, false);
+      this.camera.aspect = w / h;
+      this.camera.updateProjectionMatrix();
+    });
+
+    // Initial resize
+    window.dispatchEvent(new Event('resize'));
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════════════════
+
+const app = new Application();
+
+// Export globals for HTML onclick handlers
+window.appSimulation = app.simulation;
+window.appVoice = VoiceModule;
+</script>
+</body>
+</html>
