@@ -120,6 +120,11 @@ input[type=range]{flex:1;height:2px;accent-color:var(--c-cyan);cursor:pointer}
 #vstate{top:12px;left:50%;transform:translateX(-50%) translateY(84px);
   padding:4px 10px;font-size:8px;font-weight:700;border-radius:4px;
   letter-spacing:.07em;z-index:21;pointer-events:none;color:#2a5070}
+#vstate[title]{pointer-events:auto;cursor:help;position:fixed}
+#vstate[title]:hover::after{content:attr(title);position:absolute;top:100%;left:50%;transform:translateX(-50%);
+  margin-top:6px;background:rgba(0,20,40,.96);border:1px solid rgba(0,200,255,.45);border-radius:4px;
+  padding:6px 8px;white-space:nowrap;font-size:8px;letter-spacing:.04em;color:#9cecff;
+  box-shadow:0 0 14px rgba(0,200,255,.25);z-index:1001}
 #vstate.ok{color:#00d4ff;border-color:rgba(0,200,255,.5)}
 #vstate.warn{color:#ffaa00;border-color:rgba(255,170,0,.45)}
 #vstate.bad{color:#ff4466;border-color:rgba(255,68,102,.55)}
@@ -172,5 +177,6 @@ input[type=range]{flex:1;height:2px;accent-color:var(--c-cyan);cursor:pointer}
   #vstate { left: auto; right: 6px; top: 40px; transform: none; padding: 5px 8px; }
   .hb { flex-wrap: wrap; }
   .hbtn { min-width: 31%; padding: 7px 2px; }
+  #vstate[title]:hover::after { display: none !important; }
   .hbtn:hover::after, .hbtn:hover::before, .snr[title]::after, .ar[title]::after { display: none !important; }
 }

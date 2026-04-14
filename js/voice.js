@@ -140,18 +140,23 @@ export const VoiceModule = (() => {
     if (!synth) {
       text = 'VOZ: NO DISPONIBLE';
       klass = 'bad';
+      chip.title = 'Tu navegador no soporta SpeechSynthesis.';
     } else if (!enabled) {
       text = 'VOZ: OFF';
       klass = 'off';
+      chip.title = 'Pulsa [ VOZ OFF ] para activar la voz.';
     } else if (busy) {
       text = 'VOZ: HABLANDO';
       klass = 'ok';
+      chip.title = 'La síntesis está reproduciendo audio.';
     } else if (voicesReady || primeDone) {
       text = 'VOZ: LISTA';
       klass = 'ok';
+      chip.title = 'Voz desbloqueada y lista para hablar.';
     } else {
       text = 'VOZ: BLOQUEADA';
       klass = 'warn';
+      chip.title = 'Haz clic o toca la pantalla y luego pulsa [ VOZ OFF ] para desbloquear en Chrome.';
     }
 
     chip.textContent = text;
