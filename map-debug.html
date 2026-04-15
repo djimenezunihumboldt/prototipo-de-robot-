@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa del Robot - Visualizador</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #0a0e27;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #00ff88;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .grid-container {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .map-section {
+            background: #1a1f3a;
+            border: 2px solid #00ff88;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .map-section h2 {
+            color: #00ccff;
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        canvas {
+            border: 1px solid #00ff88;
+            background: #000;
+            display: block;
+        }
+        .legend {
+            margin-top: 20px;
+            padding: 15px;
+            background: #0f1428;
+            border-radius: 4px;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+        .legend-item {
+            margin: 8px 0;
+        }
+        .legend-color {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border-radius: 2px;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        .info {
+            margin-top: 30px;
+            padding: 20px;
+            background: #1a1f3a;
+            border-left: 4px solid #ff6600;
+            border-radius: 4px;
+        }
+        .info h3 {
+            color: #ff6600;
+            margin-top: 0;
+        }
+        .info p {
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+        table {
+            width: 100%;
+            margin-top: 15px;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #00ff88;
+        }
+        th {
+            background: #0f1428;
+            color: #00ccff;
+        }
+        tr:hover {
+            background: #1a1f3a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Mapa del Robot - Análisis Completo</h1>
+        
+        <div class="grid-container">
+            <div class="map-section">
+                <h2>🗺️ MAPA DEL MUNDO (26x26)</h2>
+                <canvas id="mapCanvas" width="600" height="600"></canvas>
+                <div class="legend">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #1e2a3c;"></span>
+                        <strong>Piso transitable</strong>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #8B0000;"></span>
+                        <strong>Muros (límites)</strong>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #ff4444;"></span>
+                        <strong>Obstáculos internos</strong>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: #00ff88;"></span>
+                        <strong>Estaciones de carga</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="map-section">
+                <h2>📍 COORDENADAS CLAVE</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Posición X</th>
+                            <th>Posición Z</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="color: #00ff88;">
+                            <td>Estación 1</td>
+                            <td>14</td>
+                            <td>10</td>
+                        </tr>
+                        <tr style="color: #00ff88;">
+                            <td>Estación 2</td>
+                            <td>3</td>
+                            <td>20</td>
+                        </tr>
+                        <tr style="color: #00ff88;">
+                            <td>Estación 3</td>
+                            <td>22</td>
+                            <td>4</td>
+                        </tr>
+                        <tr style="color: #00ff88;">
+                            <td>Estación 4</td>
+                            <td>22</td>
+                            <td>22</td>
+                        </tr>
+                        <tr style="color: #00ff88;">
+                            <td>Estación 5</td>
+                            <td>4</td>
+                            <td>4</td>
+                        </tr>
+                        <tr style="color: #ff4444;">
+                            <td>Obstáculo 1</td>
+                            <td>6</td>
+                            <td>15</td>
+                        </tr>
+                        <tr style="color: #ff4444;">
+                            <td>Obstáculo 2</td>
+                            <td>16</td>
+                            <td>9</td>
+                        </tr>
+                        <tr style="color: #ff4444;">
+                            <td>Obstáculo 3</td>
+                            <td>10</td>
+                            <td>17</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="info">
+            <h3>⚠️ Posibles Zonas de Bloqueo</h3>
+            <p><strong>Basado en la geometría del mapa:</strong></p>
+            <p>
+                El robot podría atascarse si intenta:
+            </p>
+            <ul>
+                <li><strong>Cerca de esquinas interiores:</strong> Los puntos donde los obstáculos están próximos a los muros (ej: obstáculo en (6,15) cerca del muro izquierdo)</li>
+                <li><strong>Zonas con estaciones de carga adyacentes a muros:</strong> Estación en (22,4) y (22,22) están muy cerca del muro derecho (x=25)</li>
+                <li><strong>Triangulación de obstáculos:</strong> Los tres obstáculos podrían crear "trampas" si A* no planifica correctamente alrededor de ellos</li>
+                <li><strong>Espacio limitado cerca de estaciones:</strong> Si el robot intenta cargar desde ángulos cerrados</li>
+            </ul>
+            
+            <h3 style="margin-top: 20px;">💡 Recomendaciones</h3>
+            <p>
+                Para mejorar la navegación del robot:
+            </p>
+            <ol>
+                <li><strong>Aumentar margen de seguridad:</strong> El COLLISION_MARGIN es crítico. Un valor muy pequeño puede causar atascos</li>
+                <li><strong>Mejorar la retención en esquinas:</strong> El sistema de "wall-sliding" necesita ser más agresivo al rodear obstáculos</li>
+                <li><strong>Patrollar estaciones en orden óptimo:</strong> Actualmente las visita en secuencia. Un TSP (Traveling Salesman) mejoraría la ruta</li>
+                <li><strong>Forzar re-planificación si está atascado:</strong> Si A* falla 5+ veces, regenerar una ruta completamente nueva</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        const GRID_SIZE = 26;
+        const CELL_SIZE = 20;
+
+        // Definir muros, obstáculos y estaciones
+        const walls = new Set();
+        const obstacles = [[6, 15], [16, 9], [10, 17]];
+        const chargeStations = [[14, 10], [3, 20], [22, 4], [22, 22], [4, 4]];
+
+        // Construir muros (borde exterior)
+        for (let i = 0; i < GRID_SIZE; i++) {
+            walls.add(`${i},0`);
+            walls.add(`${i},${GRID_SIZE - 1}`);
+            walls.add(`0,${i}`);
+            walls.add(`${GRID_SIZE - 1},${i}`);
+        }
+
+        function drawMap() {
+            const canvas = document.getElementById('mapCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Limpiar
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Dibujar piso
+            ctx.fillStyle = '#1e2a3c';
+            ctx.fillRect(CELL_SIZE, CELL_SIZE, (GRID_SIZE - 2) * CELL_SIZE, (GRID_SIZE - 2) * CELL_SIZE);
+
+            // Dibujar muros
+            ctx.fillStyle = '#8B0000';
+            for (const wall of walls) {
+                const [x, z] = wall.split(',').map(Number);
+                ctx.fillRect(x * CELL_SIZE, z * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            }
+
+            // Dibujar obstáculos internos
+            ctx.fillStyle = '#ff4444';
+            for (const [x, z] of obstacles) {
+                ctx.fillRect(x * CELL_SIZE, z * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            }
+
+            // Dibujar estaciones de carga
+            ctx.fillStyle = '#00ff88';
+            ctx.font = 'bold 10px Arial';
+            for (let i = 0; i < chargeStations.length; i++) {
+                const [x, z] = chargeStations[i];
+                ctx.fillRect(x * CELL_SIZE + 2, z * CELL_SIZE + 2, CELL_SIZE - 4, CELL_SIZE - 4);
+                
+                // Número de estación
+                ctx.fillStyle = '#000';
+                ctx.fillText(String(i + 1), x * CELL_SIZE + 8, z * CELL_SIZE + 13);
+                ctx.fillStyle = '#00ff88';
+            }
+
+            // Dibujar grid
+            ctx.strokeStyle = '#00ff88';
+            ctx.globalAlpha = 0.1;
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i <= GRID_SIZE; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * CELL_SIZE, 0);
+                ctx.lineTo(i * CELL_SIZE, canvas.height);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(0, i * CELL_SIZE);
+                ctx.lineTo(canvas.width, i * CELL_SIZE);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        drawMap();
+    </script>
+</body>
+</html>

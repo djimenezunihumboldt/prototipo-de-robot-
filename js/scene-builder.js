@@ -1,8 +1,9 @@
-/**
- * T-800 IA Neural v3 — Construcción de escena 3D
+﻿/**
+ * T-800 IA Neural v3 â€” ConstrucciÃ³n de escena 3D
  */
 
 import * as THREE from 'three';
+import { CONFIG } from './utils.js';
 
 export class SceneBuilder {
   constructor(scene) {
@@ -40,6 +41,36 @@ export class SceneBuilder {
     const o = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, s), m);
     o.castShadow = true;
     return o;
+  }
+
+  _createTextTexture(text) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    
+    // Fondo transparente o semi
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.fillRect(0, 0, 128, 64);
+    
+    // Texto
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 28px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 64, 32);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    return texture;
+  }
+
+  _createTextSprite(text, scale = 1.5) {
+    const texture = this._createTextTexture(text);
+    const material = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(scale, scale / 2, 1);
+    return sprite;
   }
 
   buildLights() {
@@ -81,28 +112,50 @@ export class SceneBuilder {
     const mA = this.mat(0x181e2a, 0.9, 0.08);
     const mB = this.mat(0x121620, 0.92, 0.06);
     const mG = this.mat(0xc07010, 0.3, 0, 0xd07800, 0.12);
+    
     const tG = new THREE.BoxGeometry(0.98, 0.06, 0.98);
+    const gG = new THREE.BoxGeometry(0.98, 0.007, 0.98);
+
+    let countA = 0, countB = 0, countG = 0;
+    for (let x = 0; x < GS; x++) {
+      for (let z = 0; z < GS; z++) {
+        if ((x + z) % 2 === 0) countA++; else countB++;
+        if (!world.has(x, z) && (x * 7 + z * 5) % 11 === 0) countG++;
+      }
+    }
+
+    const instA = new THREE.InstancedMesh(tG, mA, countA);
+    const instB = new THREE.InstancedMesh(tG, mB, countB);
+    const instG = new THREE.InstancedMesh(gG, mG, countG);
+    
+    instA.receiveShadow = true;
+    instB.receiveShadow = true;
+
+    const dummy = new THREE.Object3D();
+    let idxA = 0, idxB = 0, idxG = 0;
 
     for (let x = 0; x < GS; x++) {
       for (let z = 0; z < GS; z++) {
-        const tile = new THREE.Mesh(
-          tG,
-          (x + z) % 2 === 0 ? mA : mB
-        );
-        tile.position.set(x, 0, z);
-        tile.receiveShadow = true;
-        sc.add(tile);
+        dummy.position.set(x, 0, z);
+        dummy.updateMatrix();
+
+        if ((x + z) % 2 === 0) {
+          instA.setMatrixAt(idxA++, dummy.matrix);
+        } else {
+          instB.setMatrixAt(idxB++, dummy.matrix);
+        }
 
         if (!world.has(x, z) && (x * 7 + z * 5) % 11 === 0) {
-          const gl = new THREE.Mesh(
-            new THREE.BoxGeometry(0.98, 0.007, 0.98),
-            mG
-          );
-          gl.position.set(x, 0.032, z);
-          sc.add(gl);
+          dummy.position.set(x, 0.032, z);
+          dummy.updateMatrix();
+          instG.setMatrixAt(idxG++, dummy.matrix);
         }
       }
     }
+
+    sc.add(instA);
+    sc.add(instB);
+    if (countG > 0) sc.add(instG);
 
     const grid = new THREE.GridHelper(GS, GS, 0x1a3050, 0x0e2038);
     grid.position.set(GS / 2 - 0.5, 0.04, GS / 2 - 0.5);
@@ -115,59 +168,96 @@ export class SceneBuilder {
     const sc = this.scene;
 
     const mW = this.mat(0x1e2a3c, 0.45, 0.6);
-    const mWD = this.mat(0x14202e, 0.5, 0.65);
     const mWarn = this.mat(0xcc2200, 0.25, 0.05, 0xdd1100, 0.2);
     const mMetal = this.mat(0x2a3a50, 0.3, 0.8);
+    const mAcc = this.mat(0x00aaff, 0.1, 0, 0x0088ff, 0.7);
+
+    const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+
+    const wallCount = world.wallList.length;
+    let strCount = 0;
+    let accCount = 0;
+
+    world.wallList.forEach(([x, z]) => {
+      const seed = (x * 31 + z * 17) % 7;
+      const h = 0.6 + seed * 0.2;
+      if (h > 0.85) strCount++;
+      if (seed % 3 === 0) accCount++;
+    });
+
+    const bodyInst = new THREE.InstancedMesh(boxGeo, mW, wallCount);
+    const capInst = new THREE.InstancedMesh(boxGeo, mMetal, wallCount);
+    
+    bodyInst.castShadow = true;
+    bodyInst.receiveShadow = true;
+
+    let strInst = null;
+    if (strCount > 0) strInst = new THREE.InstancedMesh(boxGeo, mWarn, strCount);
+    
+    let accInst = null;
+    if (accCount > 0) accInst = new THREE.InstancedMesh(boxGeo, mAcc, accCount);
+
+    const dummy = new THREE.Object3D();
+    let idxWall = 0;
+    let idxStr = 0;
+    let idxAcc = 0;
+    let wallNumber = 0;
 
     world.wallList.forEach(([x, z]) => {
       const seed = (x * 31 + z * 17) % 7;
       const h = 0.6 + seed * 0.2;
 
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(0.94, h * 2, 0.94),
-        mW
-      );
-      body.position.set(x, h, z);
-      body.castShadow = true;
-      body.receiveShadow = true;
-      sc.add(body);
+      // Body
+      dummy.position.set(x, h, z);
+      dummy.scale.set(0.94, h * 2, 0.94);
+      dummy.updateMatrix();
+      bodyInst.setMatrixAt(idxWall, dummy.matrix);
 
-      const cap = new THREE.Mesh(
-        new THREE.BoxGeometry(0.94, 0.06, 0.94),
-        mMetal
-      );
-      cap.position.set(x, h * 2 + 0.03, z);
-      sc.add(cap);
+      // Cap
+      dummy.position.set(x, h * 2 + 0.03, z);
+      dummy.scale.set(0.94, 0.06, 0.94);
+      dummy.updateMatrix();
+      capInst.setMatrixAt(idxWall, dummy.matrix);
+      
+      // Etiqueta de texto grande
+      const label = this._createTextSprite(`${x},${z}`, 1.2);
+      label.position.set(x, h * 2 + 0.5, z);
+      sc.add(label);
+      
+      idxWall++;
 
+      // Str
       if (h > 0.85) {
-        const str = new THREE.Mesh(
-          new THREE.BoxGeometry(0.94, 0.07, 0.94),
-          mWarn
-        );
-        str.position.set(x, h * 0.55, z);
-        sc.add(str);
+        dummy.position.set(x, h * 0.55, z);
+        dummy.scale.set(0.94, 0.07, 0.94);
+        dummy.updateMatrix();
+        strInst.setMatrixAt(idxStr++, dummy.matrix);
       }
 
+      // Acc
       if (seed % 3 === 0) {
-        const acc = new THREE.Mesh(
-          new THREE.BoxGeometry(0.96, 0.03, 0.96),
-            this.mat(0x00aaff, 0.1, 0, 0x0088ff, 0.7)
-          );
-          acc.position.set(x, h * 0.8, z);
-        sc.add(acc);
+        dummy.position.set(x, h * 0.8, z);
+        dummy.scale.set(0.96, 0.03, 0.96);
+        dummy.updateMatrix();
+        accInst.setMatrixAt(idxAcc++, dummy.matrix);
       }
     });
+
+    sc.add(bodyInst);
+    sc.add(capInst);
+    if (strInst) sc.add(strInst);
+    if (accInst) sc.add(accInst);
   }
 
   buildChargeStation() {
-    // Estación 1
-    this._buildChargeStationAt(14.5, 10.5);
-    // Estación 2
-    this._buildChargeStationAt(3.5, 20.5);
+    // Generar todas las estaciones dinÃ¡micamente desde la configuraciÃ³n
+    CONFIG.CHARGE_STATIONS.forEach(station => {
+      this._buildChargeStationAt(station.x + 0.5, station.z + 0.5);
+    });
   }
 
   _buildChargeStationAt(cx, cz) {
-    // Base de la estación
+    // Base de la estaciÃ³n
     const baseMat = this.mat(0x002244, 0.8, 0.4);
     const base = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 0.1, 16), baseMat);
     base.position.set(cx, 0.05, cz);
@@ -180,11 +270,17 @@ export class SceneBuilder {
     ring.rotation.x = Math.PI / 2;
     this.scene.add(ring);
 
-    // Pilar holográfico central
+    // Pilar hologrÃ¡fico central
     const holoMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.2 });
     const holo = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 1.5, 16), holoMat);
     holo.position.set(cx, 0.75, cz);
     this.scene.add(holo);
+
+    const cxI = Math.floor(cx); const czI = Math.floor(cz);
+    const label = this._createTextSprite('CARGA '+cxI+','+czI, 2.0);
+    label.position.set(cx, 1.8, cz);
+    label.material.color.setHex(0x00ffaa);
+    this.scene.add(label);
 
     // Luz ambiental
     const light = new THREE.PointLight(0x00ff88, 2, 5);
@@ -239,3 +335,4 @@ export class SceneBuilder {
     return { pool, mats };
   }
 }
+

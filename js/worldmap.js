@@ -38,6 +38,9 @@ export class WorldMap {
       this.add(GS - 1, i);
     }
 
+    // Petición del usuario: Quitar el bloque 23,0 que interrumpía el recorrido
+    this.remove(23, 0);
+
     // Obstáculos suaves de referencia: visibles y fáciles de detectar a tiempo.
     this.add(6, 15);
     this.add(16, 9);

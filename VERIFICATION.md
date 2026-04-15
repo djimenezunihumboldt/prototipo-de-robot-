@@ -259,6 +259,40 @@ console.log(window.appSimulation.nn.stats)
 
 ### Errores Comunes y Soluciones
 
+---
+
+## ✅ Ajuste de Rendimiento en Modo Alta Calidad (15-04-2026)
+
+### Problema reportado
+- En ejecución local, al usar `CALIDAD: ALTA` aparecían congelamientos y caída marcada de FPS.
+
+### Causas encontradas
+- Escaneo local del mapa con raycasts demasiado densos y muy frecuentes en el controlador.
+- Frecuencias de actualización visual (rayos, ruta, HUD, red) agresivas para ALTA.
+- Carga GPU elevada por `pixelRatio` alto en equipos locales sin margen suficiente.
+
+### Cambios aplicados
+- **`js/robot-controller.js`**
+  - Nuevo ajuste dinámico por rendimiento: `setPerformanceMode(mode)`.
+  - Escaneo local optimizado con parámetros adaptativos (`scanInterval`, `scanAngleStep`, `scanRayCount`, `scanRayWidth`, `scanRayMax`).
+  - Reducción de raycasts por ciclo en ALTA y BAJA sin tocar la lógica crítica de colisiones.
+
+- **`js/simulation.js`**
+  - El modo de rendimiento ahora se propaga también al `RobotController`.
+  - Frecuencias reajustadas en ALTA/BAJA para evitar picos de CPU:
+    - `rayUpdateInterval`, `pathDrawInterval`, `nnDrawInterval`, `hudInterval`.
+  - Escaneo visual de celdas (`scan overlay`) ahora usa intervalo configurable por calidad.
+
+- **`index.html`**
+  - Ajuste de `pixelRatio` para reducir carga de GPU:
+    - Inicial: `1.35` desktop, `1.0` low-power.
+    - En `applyQualityMode('alta')`: tope `1.35` desktop, `1.0` low-power.
+
+### Resultado esperado
+- Menos stutter en `CALIDAD: ALTA` manteniendo buena fidelidad visual.
+- Mejor estabilidad de FPS en ejecución local.
+- Menor uso de CPU/GPU durante navegación automática prolongada.
+
 | Problema | Causa | Solución |
 |---|---|---|
 | "tf is not defined" | TensorFlow.js no cargó | Recarga página (Ctrl+R) |

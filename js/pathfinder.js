@@ -192,18 +192,24 @@ export class AStarPathfinder {
       [-1, -1],
     ];
 
-    while (queue.length > 0) {
+    let checkCount = 0;
+
+    while (queue.length > 0 && checkCount < 1000) {
+      checkCount++;
       const { x, z } = queue.shift();
 
-      if (!visited.has(key(x, z))) {
+      if (!visited.has(key(x, z)) && W.canMoveTo(x + 0.5, z + 0.5)) {
         // Found frontier — get actual path to it
-        return this.findPath(
+        const path = this.findPath(
           Math.round(sx),
           Math.round(sz),
           x,
           z,
           opts
         );
+        if (path && path.length > 0) {
+          return path;
+        }
       }
 
       for (const [dx, dz] of DIRS) {
@@ -211,7 +217,7 @@ export class AStarPathfinder {
         const nz = z + dz;
         const nk = key(nx, nz);
 
-        if (!seen.has(nk) && W.isWalkable(nx, nz)) {
+        if (!seen.has(nk) && W.isWalkable(nx, nz) && W.canMoveTo(nx + 0.5, nz + 0.5)) {
           seen.add(nk);
           queue.push({ x: nx, z: nz });
         }

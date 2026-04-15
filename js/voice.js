@@ -261,11 +261,23 @@ export const VoiceModule = (() => {
   }
 
   const cooldowns = {};
+  let lastGlobalSpeak = 0;
+  const GLOBAL_COOLDOWN = 14000; // 14 segundos de silencio global por defecto
 
   function speakOnce(key, interval = 8000, ctx = {}) {
     const now = Date.now();
+    
+    // Evitar que el robot hable tan seguido (Global mute) excepto para el arranque o finalización
+    const isPriority = key === 'start' || key === 'explore_done';
+    if (!isPriority && now - lastGlobalSpeak < GLOBAL_COOLDOWN) {
+      return;
+    }
+    
     if ((cooldowns[key] || 0) + interval > now) return;
+    
     cooldowns[key] = now;
+    if (!isPriority) lastGlobalSpeak = now;
+    
     speak(pick(key, ctx));
   }
 

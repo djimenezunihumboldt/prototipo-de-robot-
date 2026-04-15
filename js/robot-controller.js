@@ -1,6 +1,6 @@
-/**
- * T-800 IA Neural v3 — Controlador mejorado del robot
- * Lógica de movimiento, navegación y anti-bloqueo
+﻿/**
+ * T-800 IA Neural v3 â€” Controlador mejorado del robot
+ * LÃ³gica de movimiento, navegaciÃ³n y anti-bloqueo
  */
 
 import {
@@ -45,8 +45,15 @@ export class RobotController {
     this.scannedBlocked = new Set();
     this.blockedRisk = new Map();
     this.scanCooldown = 0;
+    this.scanInterval = 0.24;
+    this.scanAngleStep = 10;
+    this.scanRayCount = 2;
+    this.scanRayWidth = 8;
+    this.scanRayMax = 5.1;
+    this.performanceMode = 'alta';
     this.stableTurnTime = 0;
     this.lastPos = { x: this.robot.position.x, z: this.robot.position.z };
+    this.failedChargeStations = new Set();
 
     // Anti-stick & rotation logic
     this.stuckCnt = 0;
@@ -74,9 +81,9 @@ export class RobotController {
     this._setupMission();
   }
 
-  // ─────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // ANTI-SPIN LOGIC (Mejorado)
-  // ─────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   _isOscillating() {
     const r = this.actionHistory.slice(-8);
@@ -92,7 +99,7 @@ export class RobotController {
       if (turns[i] !== turns[i - 1]) flips++;
     }
 
-    // Detecta también giros persistentes sin avance (spin-lock).
+    // Detecta tambiÃ©n giros persistentes sin avance (spin-lock).
     const hasLinear = r.some(
       (a) => a === 'avanzar' || a === 'explorar' || a === 'retroceder'
     );
@@ -119,7 +126,7 @@ export class RobotController {
     const k = `${x},${z}`;
     this.scannedBlocked.add(k);
 
-    // Mayor riesgo cuanto más cerca del robot está el obstáculo.
+    // Mayor riesgo cuanto mÃ¡s cerca del robot estÃ¡ el obstÃ¡culo.
     const near = 1 - clamp(dist / Math.max(0.001, maxDist), 0, 1);
     const sampleRisk = clamp(0.2 + near * 0.8, 0.2, 1);
     const prev = this.blockedRisk.get(k) || 0;
@@ -149,10 +156,13 @@ export class RobotController {
   _scanEnvironmentLocal() {
     const wx = this.robot.position.x;
     const wz = this.robot.position.z;
+    const step = this.scanAngleStep || 6;
+    const rayCount = this.scanRayCount || 3;
+    const rayWidth = this.scanRayWidth || 10;
+    const maxLength = this.scanRayMax || 6.2;
 
-    for (let a = 0; a < 360; a += 6) {
-      const max = 6.2;
-      const hitDist = this.world.rayDistAdvanced(wx, wz, a, 3, 10, max);
+    for (let a = 0; a < 360; a += step) {
+      const hitDist = this.world.rayDistAdvanced(wx, wz, a, rayCount, rayWidth, maxLength);
       const rad = deg2rad(a);
 
       for (let d = 0.2; d < Math.max(0.2, hitDist - 0.15); d += 0.28) {
@@ -163,7 +173,7 @@ export class RobotController {
 
       const bx = Math.round(wx + Math.sin(rad) * hitDist);
       const bz = Math.round(wz + Math.cos(rad) * hitDist);
-      this._markScannedBlocked(bx, bz, hitDist, max);
+      this._markScannedBlocked(bx, bz, hitDist, maxLength);
     }
   }
 
@@ -209,7 +219,7 @@ export class RobotController {
     this.missionComplete = false;
 
     set('st-tg', `(${this.goalCell.x},${this.goalCell.z})`);
-    set('pi-txt', 'MISIÓN: NAVEGAR A META');
+    set('pi-txt', 'MISIÃ“N: NAVEGAR A META');
 
     const d = $('pi-dot');
     if (d) {
@@ -220,7 +230,7 @@ export class RobotController {
 
   _pickGoalCell(sx, sz) {
     const GS = CONFIG.GRID_SIZE;
-    const minEdge = 4;
+    const minEdge = 2; // Expandir el margen para que patrulle mÃ¡s cerca del borde
     const center = (GS - 1) / 2;
     let best = null;
     let bestScore = -Infinity;
@@ -259,16 +269,25 @@ export class RobotController {
 
   _pickGoalFarFrom(refX, refZ) {
     const GS = CONFIG.GRID_SIZE;
-    const minEdge = 3;
+    const minEdge = 2; // Expandir el margen para que patrulle mÃ¡s cerca del borde
     const center = (GS - 1) / 2;
     let unvisited = [];
+
+    // Priorizar visitar las estaciones de carga primero (Patrullaje)
+    for (const station of CONFIG.CHARGE_STATIONS) {
+      const cx = Math.round(station.x);
+      const cz = Math.round(station.z);
+      if (!this.visited.has(`${cx},${cz}`)) {
+        return { x: cx, z: cz }; // Forzar ruta hacia centro de carga no visitado
+      }
+    }
 
     // Recolectar casillas no visitadas del interior, priorizando frontera
     for (let x = minEdge; x <= GS - 1 - minEdge; x++) {
       for (let z = minEdge; z <= GS - 1 - minEdge; z++) {
         if (!this.world.isWalkable(x, z)) continue;
         if (!this.world.canMoveTo(x + 0.5, z + 0.5)) continue;
-        if (this._isNearChargeCell(x, z)) continue;
+        // Removido isNearChargeCell para explorar estaciones
         if (!this.visited.has(`${x},${z}`)) {
           const wallGap = Math.min(x, z, GS - 1 - x, GS - 1 - z);
           const distance = Math.hypot(x - refX, z - refZ);
@@ -279,13 +298,23 @@ export class RobotController {
       }
     }
 
-    // Si aún hay zonas sin explorar, selecciona la mejor y más lejana
+    // Si aÃºn hay zonas sin explorar, selecciona la mejor y mÃ¡s lejana
     if (unvisited.length > 0) {
       unvisited.sort((a, b) => b.score - a.score);
-      return { x: unvisited[0].x, z: unvisited[0].z };
+        const goal = { x: unvisited[0].x, z: unvisited[0].z };
+        // Validar que se puede llegar a ese punto
+        if (!this.world.canMoveTo(goal.x + 0.5, goal.z + 0.5)) {
+          // Si no se puede, intentar con el siguiente
+          for (let i = 1; i < unvisited.length; i++) {
+            if (this.world.canMoveTo(unvisited[i].x + 0.5, unvisited[i].z + 0.5)) {
+              return { x: unvisited[i].x, z: unvisited[i].z };
+            }
+          }
+        }
+        return goal;
     }
 
-    // Si ya exploró todo, busca nuevos destinos periódicos lejos de inicio
+    // Fallback: patrullaje en zonas seguras
     let patrolZones = [];
     for (let x = minEdge; x <= GS - 1 - minEdge; x++) {
       for (let z = minEdge; z <= GS - 1 - minEdge; z++) {
@@ -308,31 +337,53 @@ export class RobotController {
     return { x: refX, z: refZ };
   }
 
-  _getClosestChargeStation() {
+  _getClosestChargeStation(skipStation = null) {
     const rX = this.robot.position.x;
     const rZ = this.robot.position.z;
-    const dist1 = distance(rX, rZ, CONFIG.CHARGE_STATION.x, CONFIG.CHARGE_STATION.z);
-    const dist2 = distance(rX, rZ, CONFIG.CHARGE_STATION_2.x, CONFIG.CHARGE_STATION_2.z);
-    return dist1 <= dist2 ? CONFIG.CHARGE_STATION : CONFIG.CHARGE_STATION_2;
+    let closest = null;
+    let minDist = Infinity;
+
+    CONFIG.CHARGE_STATIONS.forEach(station => {
+      if (this.failedChargeStations.has(`${station.x},${station.z}`)) {
+        return; // Skip failed stations
+      }
+      if (skipStation && skipStation.x === station.x && skipStation.z === station.z) {
+        return; // Skip this station
+      }
+      const dist = distance(rX, rZ, station.x + 0.5, station.z + 0.5);
+      if (dist < minDist) {
+        minDist = dist;
+        closest = station;
+      }
+    });
+
+    return closest;
   }
 
-  _getChargeCell() {
-    const station = this._getClosestChargeStation();
-    return { x: Math.round(station.x), z: Math.round(station.z) };
+  _getChargeCell(skipStation = null) {
+    const c = this._getClosestChargeStation(skipStation);
+    if (!c) return null;
+    return { x: Math.round(c.x), z: Math.round(c.z) };
   }
 
-  _isNearChargeCell(x, z, minDist = 7.8) {
-    const c = this._getChargeCell();
-    return Math.hypot(x - c.x, z - c.z) < minDist;
+  _isNearChargeCell(x, z, minDist = 4.0) {
+    let tooClose = false;
+    CONFIG.CHARGE_STATIONS.forEach(station => {
+      if (Math.hypot(x - station.x, z - station.z) < minDist) {
+        tooClose = true;
+      }
+    });
+    return tooClose;
   }
 
   _distanceToCharge() {
-    const station = this._getClosestChargeStation();
+    const c = this._getClosestChargeStation();
+    if (!c) return Infinity; // Prevenir error 'x' nulo si todas las estaciones fallan
     return distance(
       this.robot.position.x,
       this.robot.position.z,
-      station.x + 0.5,
-      station.z + 0.5
+      c.x + 0.5,
+      c.z + 0.5
     );
   }
 
@@ -342,12 +393,17 @@ export class RobotController {
 
   _shouldRechargeNow() {
     const dist = this._distanceToCharge();
-    const reserve = 5 + dist * 2;
-    return this.battery <= Math.max(8, reserve);
+    const reserve = 15 + dist * 3.5;
+    return this.battery <= Math.max(15, reserve);
   }
 
-  _goToChargeStation() {
-    const c = this._getChargeCell();
+_goToChargeStation(skipStation = null) {
+      const c = this._getChargeCell(skipStation);
+      if (!c) {
+        // Si no hay estaciÃ³n disponible, esperar
+        this.rechargeMode = false;
+        return;
+      }
     this.rechargeMode = true;
     this.missionComplete = false;
     this.goalCell = { ...c };
@@ -388,7 +444,7 @@ export class RobotController {
     const pr = sr ? clamp(+sr.value / 100, 0, 1) : 0.7;
     const pw = sw ? clamp(+sw.value / 100, 0, 1) : 0.65;
 
-    // Escala dinÃ¡mica independiente:
+    // Escala dinÃƒÂ¡mica independiente:
     // riskWeight: evita zonas detectadas peligrosas
     // wallWeight: evita pegarse a paredes/esquinas
     const riskWeight = 0.35 + pr * 2.75;
@@ -440,7 +496,15 @@ export class RobotController {
       }
     );
 
-    // Priorizar exploración agresiva de nuevas fronteras
+    if (this.bfsPath.length === 0 && this.goalCell) {
+      if (this.rechargeMode) {
+        this.failedChargeStations.add(`${this.goalCell.x},${this.goalCell.z}`);
+      } else {
+        this.visited.add(`${this.goalCell.x},${this.goalCell.z}`);
+      }
+    }
+
+    // Priorizar exploraciÃ³n agresiva de nuevas fronteras
     if (this.bfsPath.length === 0 || this.visited.size < CONFIG.GRID_SIZE * CONFIG.GRID_SIZE * 0.6) {
       this.bfsPath = this.pathfinder.findFrontier(
         cx,
@@ -475,7 +539,7 @@ export class RobotController {
     } else {
       this.bfsTarget = null;
       set('st-tg', this.rechargeMode ? 'ESCAPE A RECARGA' : 'SIN RUTA');
-      set('pi-txt', this.rechargeMode ? 'ATRAPADO - BUSCANDO SALIDA PARA RECARGAR' : 'NO HAY RUTA A META — REINTENTANDO');
+      set('pi-txt', this.rechargeMode ? 'ATRAPADO - BUSCANDO SALIDA PARA RECARGAR' : 'NO HAY RUTA A META â€” REINTENTANDO');
 
       const d = $('pi-dot');
       if (d) {
@@ -486,20 +550,40 @@ export class RobotController {
         }
       }
 
-      // En modo recarga atrapado, fuerza escape hacia apertura
+      // En modo recarga atrapado, marcar estaciÃ³n como fallida e intentar otra
       if (this.rechargeMode) {
-        this.forceFwdTimer = 2.5;
-        this.forceFwdAngle = this._bestOpenAngle();
-        this.stuckCnt = 0;
+        const currentStation = this._getClosestChargeStation();
+        if (currentStation) {
+          this.failedChargeStations.add(`${currentStation.x},${currentStation.z}`);
+        }
+        
+        // NO llamamos recursivamente a _goToChargeStation. Esto previene un
+        // Max Call Stack Exceeded al forzar salidas iterativas y permitir
+        // que el pathfinder escape y que _shouldRechargeNow trabaje sin loops bruscos.
+        const nextStation = this._getClosestChargeStation(currentStation);
+        if (nextStation) {
+          this.voice.speakOnce('stuck', 12000);
+          this.forceFwdTimer = 1.0;
+          this.forceFwdAngle = this._bestOpenAngle();
+          this.rechargeMode = false;
+        } else {
+          // Si no hay mÃ¡s estaciones, fuerza escape general
+          this.forceFwdTimer = 2.5;
+          this.forceFwdAngle = this._bestOpenAngle();
+          this.stuckCnt = 0;
+          this.voice.speakOnce('stuck', 12000);
+          this.failedChargeStations.clear();
+          this.rechargeMode = false;
+        }
+      } else {
+        this.voice.speakOnce('stuck', 12000);
       }
-
-      this.voice.speakOnce('stuck', 12000);
     }
   }
 
-  // ─────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // COLLISION & ESCAPE
-  // ─────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   _subStep(dx, dz) {
     const dist = Math.hypot(dx, dz);
@@ -575,9 +659,9 @@ export class RobotController {
     return bestA;
   }
 
-  // ─────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // MOVEMENT ENGINE (Mejorado)
-  // ─────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   applyMovement(dt, curAct) {
     const W = this.world;
@@ -651,7 +735,7 @@ export class RobotController {
     this.scanCooldown = Math.max(0, this.scanCooldown - dt);
     if (this.scanCooldown <= 0) {
       this._scanEnvironmentLocal();
-      this.scanCooldown = 0.18;
+      this.scanCooldown = this.scanInterval || 0.18;
     }
 
     const SPEED = CONFIG.SPEED;
@@ -716,10 +800,10 @@ export class RobotController {
 
       let wp = curAct === 'avanzar' ? this._getWaypoint() : null;
 
-      // Si en modo recarga sin waypoint, apunta directo a la estación
+      // Si en modo recarga sin waypoint, apunta directo a la estaciÃ³n
       if (this.rechargeMode && !wp) {
         const c = this._getChargeCell();
-        wp = { x: c.x, z: c.z };
+        if (c) { wp = { x: c.x, z: c.z }; }
       }
 
       if (wp) {
@@ -747,7 +831,7 @@ export class RobotController {
           this.robot.position.z,
           this.robotAngle,
           3, // Reducido de 7 a 3 rayos para no asustarse de las paredes laterales al cruzar aberturas
-          12, // Reducido el ángulo de visión periférica de 24° a 12° para permitir el paso
+          12, // Reducido el Ã¡ngulo de visiÃ³n perifÃ©rica de 24Â° a 12Â° para permitir el paso
           3.2
         );
 
@@ -764,7 +848,7 @@ export class RobotController {
 
         const advanceBoost = fwdSafe <= SAFE_STOP ? 0.6 : 1;
 
-        // Si está muy desalineado, primero orienta y recién avanza.
+        // Si estÃ¡ muy desalineado, primero orienta y reciÃ©n avanza.
         if (absDiff > 42) {
           this.robotVel = 0;
           this._markVisited();
@@ -939,11 +1023,30 @@ export class RobotController {
     return this.bfsPath.length > 0 ? this.bfsPath[0] : null;
   }
 
-  // ─────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // AI DECISION MAKING
-  // ─────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   decide() {
+    if (this.autoMode) {
+      const totalWalkable = this.world.countWalkable();
+      if (totalWalkable > 0) {
+        const coverage = (this.visited.size / totalWalkable) * 100;
+        if (coverage >= 92) {
+          this.autoMode = false;
+          set('pi-txt', 'MISIÃ“N: ÃREA 100% CUBIERTA, FINALIZANDO');
+          set('st-tg', '100% COBERTURA');
+          if (this.voice) {
+            this.voice.speakOnce('explore_done', 0);
+            setTimeout(() => this.voice.toggle(false), 3000);
+          }
+          const d = $('pi-dot');
+          if (d) d.style.cssText = 'background:#00ff88;box-shadow:0 0 8px #00ff88';
+          return 'detener';
+        }
+      }
+    }
+
     const luz = +$('s-luz').value / 100;
     const son = +$('s-son').value / 100;
     const dis = +$('s-dis').value / 100;
@@ -970,7 +1073,7 @@ export class RobotController {
       6
     );
 
-    // RED NEURONAL TENSORFLOW.JS — Obtener predicciones
+    // RED NEURONAL TENSORFLOW.JS â€” Obtener predicciones
     this.lastNN = this.nn.forward([
       luz,
       son,
@@ -1039,15 +1142,23 @@ export class RobotController {
       this._goToChargeStation();
     }
 
-    // ─────────────────────────────────────────────
-    // JERARQUÍA DE DECISIONES CON NN
-    // ─────────────────────────────────────────────
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // JERARQUÃA DE DECISIONES CON NN
+    // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    // 1. EMERGENCIA: Batería crítica
+    // 1. EMERGENCIA: BaterÃ­a crÃ­tica
     if (bat <= 0.02) {
       act = 'detener';
     }
-    // 2. BATERÍA BAJA: Ir directo a recargar (PRIORIDAD ALTA)
+    // 2. SEGURIDAD CRÃTICA: Priorizar siempre evitar choque, incluso si quiere cargar
+    else if (fwdAdv < CONFIG.OBSTACLE_CLOSE) {
+      act = 'retroceder';
+      nnWeight = Math.max(nnRetroceder, 0.3);
+      this.evaded++;
+      this.forceFwdTimer = 0; // Cancelar avance forzado si chocamos
+      this.voice.speakOnce('retroceder', 9000);
+    }
+    // 3. BATERÃA BAJA: Ir directo a recargar (PRIORIDAD MEDIA-ALTA)
     else if (this.rechargeMode || (!this.rechargeMode && this._shouldRechargeNow())) {
       if (!this.rechargeMode) {
         this.voice.speakContext('lowbat', {
@@ -1060,15 +1171,7 @@ export class RobotController {
       act = 'avanzar';
       nnWeight = Math.max(nnAvanzar, 0.5);
     }
-    // 3. SEGURIDAD CRÍTICA: Obstáculo demasiado cercano
-    else if (fwdAdv < CONFIG.OBSTACLE_CLOSE) {
-      act = 'retroceder';
-      nnWeight = Math.max(nnRetroceder, 0.3);
-      this.evaded++;
-      this.forceFwdTimer = 0; // Cancelar avance forzado si chocamos
-      this.voice.speakOnce('retroceder', 9000);
-    } 
-    // 4. EVASIÓN COORDINADA: Obstáculo cercano pero no crítico
+    // 4. EVASIÃ“N COORDINADA: ObstÃ¡culo cercano pero no crÃ­tico
     else if (fwdAdv < CONFIG.OBSTACLE_NEAR) {
       // Si casi chocamos, retroceder siempre es prioritario
       if (fwdAdv < CONFIG.OBSTACLE_NEAR - 0.3 || this.consecutiveTurns >= 3) {
@@ -1098,7 +1201,7 @@ export class RobotController {
           } else {
             act = 'retroceder';
             nnWeight = Math.max(nnRetroceder, 0.45);
-            this.forceFwdTimer = 1.5; // Fuerza escape rápido
+            this.forceFwdTimer = 1.5; // Fuerza escape rÃ¡pido
           }
         }
         // Aplicar influencia neural
@@ -1109,7 +1212,7 @@ export class RobotController {
           act = 'girar-der';
           nnWeight = nnGirarDer;
         } else {
-          // Fallback a raycast - preferir el lado más despejado
+          // Fallback a raycast - preferir el lado mÃ¡s despejado
           act = lS > rS ? 'girar-izq' : 'girar-der';
           nnWeight = Math.max(nnGirarIzq, nnGirarDer);
         }
@@ -1118,32 +1221,32 @@ export class RobotController {
       this.evaded++;
       this.voice.speakOnce('girar', 9000);
     } 
-    // 5. COMUNICACIÓN INTELIGENTE: Audio detectado + NN alta confianza
+    // 5. COMUNICACIÃ“N INTELIGENTE: Audio detectado + NN alta confianza
     else if (son > 0.78 && fwdAdv > 2 && nnResponder > 0.35) {
       act = 'responder';
       nnWeight = nnResponder;
       this.voice.speakOnce('responder', 12000);
     } 
-    // 4.2 RECARGA PRIORITARIA: ir directo a la estación central
+    // 4.2 RECARGA PRIORITARIA: ir directo a la estaciÃ³n central
     else if (this.rechargeMode) {
       act = 'avanzar';
       nnWeight = Math.max(nnAvanzar, 0.35);
     }
-    // 4.5 MISIÓN SECUNDARIA: Investigar anomalías en el mapa (Sin perder ruta A*)
+    // 4.5 MISIÃ“N SECUNDARIA: Investigar anomalÃ­as en el mapa (Sin perder ruta A*)
     else if ((tmp > 0.8 || luz < 0.25) && fwdAdv > 1.5 && nnExplorar > 0.25) {
       act = 'explorar';
       nnWeight = nnExplorar;
       this.voice.speakOnce('explorar', 15000);
     }
-    // 5. NAVEGACIÓN BASADA EN RUTA
+    // 5. NAVEGACIÃ“N BASADA EN RUTA
     else if (this.bfsPath.length > 0) {
       act = 'avanzar';
       nnWeight = nnAvanzar;
       this.voice.speakOnce('avanzar', 14000);
     } 
-    // 8. EXPLORACIÓN ADAPTATIVA
+    // 8. EXPLORACIÃ“N ADAPTATIVA
     else {
-      // Decidir entre exploración vs permanencia basado en NN
+      // Decidir entre exploraciÃ³n vs permanencia basado en NN
       if (nnExplorar > nnAvanzar && confidence > 0.4) {
         act = 'explorar';
         nnWeight = nnExplorar;
@@ -1154,17 +1257,17 @@ export class RobotController {
       }
     }
 
-    // Lógica de batería baja
+    // LÃ³gica de baterÃ­a baja
     if (bat < 0.22) {
       this.voice.speakOnce('lowbat', 18000);
     }
 
-    // Retroalimentación de progreso
+    // RetroalimentaciÃ³n de progreso
     if (this.steps > 0 && this.steps % 90 === 0) {
       this.voice.speakOnce('progress', 32000);
     }
 
-    // Evento de obstáculos evitados
+    // Evento de obstÃ¡culos evitados
     if (this.evaded > 0 && this.evaded % 8 === 0) {
       this.voice.speakOnce('obstacle', 22000);
     }
@@ -1172,7 +1275,7 @@ export class RobotController {
     this.steps++;
     this._recordAction(act);
 
-    // Drenaje de batería adaptativo según la acción
+    // Drenaje de baterÃ­a adaptativo segÃºn la acciÃ³n
     if (this.autoMode) {
       const dragMultiplier = (act === 'girar-izq' || act === 'girar-der') ? 1.2 : 1.0;
       this.battery = Math.max(0, this.battery - CONFIG.BATTERY_DRAIN_RATE * dragMultiplier);
@@ -1181,9 +1284,22 @@ export class RobotController {
     return act;
   }
 
-  // ─────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // STATE MANAGEMENT
-  // ─────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  setPerformanceMode(mode = 'alta') {
+    this.performanceMode = mode === 'baja' ? 'baja' : 'alta';
+    const low = this.performanceMode === 'baja';
+
+    // Reducimos la densidad de escaneo en baja calidad para ahorrar CPU
+    this.scanInterval = low ? 0.46 : 0.24;
+    this.scanAngleStep = low ? 18 : 10;
+    this.scanRayCount = low ? 1 : 2;
+    this.scanRayWidth = low ? 0 : 8;
+    this.scanRayMax = low ? 4.3 : 5.1;
+    this.scanCooldown = Math.min(this.scanCooldown, 0.06);
+  }
 
   reset() {
     this.isCharging = false;

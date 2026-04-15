@@ -41,10 +41,15 @@ export const distance = (x1, z1, x2, z2) =>
 export const CONFIG = {
   GRID_SIZE: 26,
   PERF_LEVEL: 'high',
-  CHARGE_STATION: { x: 14, z: 10 },
-  CHARGE_STATION_2: { x: 3, z: 20 },
+  CHARGE_STATIONS: [
+    { x: 14, z: 10 },
+    { x: 3, z: 20 },
+    { x: 20, z: 5 },
+    { x: 20, z: 20 },
+    { x: 4, z: 4 }
+  ],
   ROBOT_RADIUS: 0.38,
-  COLLISION_MARGIN: 0.10,
+  COLLISION_MARGIN: 0.18,
   COLLISION_STEP: 0.03,
   SPEED: 4.0,
   TURN_SPEED: 150,
@@ -55,9 +60,9 @@ export const CONFIG = {
   STUCK_THRESHOLD: 5,
   STUCK_ESCAPE_THRESHOLD: 10,
   MAX_RAY_DISTANCE: 8,
-  OBSTACLE_CLOSE: 0.95,  // Aumentado: detecta muros más temprano
-  OBSTACLE_NEAR: 1.85,   // Aumentado: comienza evasión más agresiva
-  CLEAR_DISTANCE: 2.2,   // Aumentado: distancia segura de muros
+  OBSTACLE_CLOSE: 0.35,
+  OBSTACLE_NEAR: 0.85,
+  CLEAR_DISTANCE: 1.5,
   BATTERY_DRAIN_RATE: 0.18,
   TURN_LOCK_DURATION: 0.9,
   TURN_LOCK_VARIANCE: 0.3,

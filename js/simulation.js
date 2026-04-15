@@ -73,6 +73,8 @@ export class Simulation {
     this.trailSpawnInterval = 0.2;
     this.trailFadeStep = 0.011;
     this.trailEnabled = true;
+    this.scanOverlayInterval = 0.16;
+    this.scanOverlayBeforeLow = null;
 
     this.nc = $('nc');
     this.nx2 = this.nc.getContext('2d');
@@ -81,6 +83,7 @@ export class Simulation {
     this._setupRays();
     this._setupMissionMarkers();
     this._setupScanOverlay();
+    this.robotController.setPerformanceMode(this.performanceMode);
   }
 
   _setupScanOverlay() {
@@ -146,7 +149,7 @@ export class Simulation {
   _updateScanOverlay(dt) {
     this.scanOverlayCooldown = Math.max(0, this.scanOverlayCooldown - dt);
     if (this.scanOverlayCooldown > 0) return;
-    this.scanOverlayCooldown = 0.12;
+    this.scanOverlayCooldown = this.scanOverlayInterval;
 
     if (!this.scanOverlayGroup || !this.scanBlockedGroup) return;
     this.scanOverlayGroup.visible = this.scanOverlayEnabled;
@@ -399,7 +402,6 @@ export class Simulation {
   }
 
   _drawNN() {
-    if (this.performanceMode === 'baja') return;
     if (document.hidden || !this.robotController.lastNN || !this.nc.width) return;
 
     const { nx2: ctx, nc } = this;
@@ -611,7 +613,7 @@ export class Simulation {
     setTimeout(() => {
       this.isWaving = false;
       this.robotController.isGreeting = false;
-    }, 24000);
+    }, 4500); // Saludo breve en vez de los 24s originales
   }
 
   toggleAuto() {
@@ -845,40 +847,40 @@ export class Simulation {
     const low = this.performanceMode === 'baja';
     CONFIG.PERF_LEVEL = low ? 'low' : 'high';
 
-    this.rayUpdateInterval = low ? 0.12 : 0.05;
-    this.pathDrawInterval = low ? 0.24 : 0.12;
-    this.nnDrawInterval = low ? 0.35 : 0.18;
-    this.hudInterval = low ? 0.18 : 0.1;
+    this.rayUpdateInterval = low ? 0.15 : 0.07;
+    this.pathDrawInterval = low ? 0.28 : 0.14;
+    this.nnDrawInterval = low ? 0.42 : 0.22;
+    this.hudInterval = low ? 0.22 : 0.12;
     this.trailSpawnInterval = low ? 0.34 : 0.2;
     this.trailFadeStep = low ? 0.02 : 0.011;
-    this.trailEnabled = !low;
+    this.trailEnabled = true; // Mantener siempre rastro en baja y alta
+    this.scanOverlayInterval = low ? 0.4 : 0.16;
 
+    // Mantener los rayos siempre visibles
     if (this.rayGrp) {
-      this.rayGrp.visible = !low;
+      this.rayGrp.visible = true; 
     }
 
+    // Mantener la visual de la Red Neuronal
     if (this.nc) {
-      this.nc.style.display = low ? 'none' : 'block';
+      this.nc.style.display = 'block';
     }
 
     const pnn = $('pnn');
     if (pnn) {
-      pnn.style.display = low ? 'none' : 'block';
+      pnn.style.display = 'block';
     }
 
-    if (low) {
-      this.scanOverlayEnabled = false;
-      const bs = $('btn-scan');
-      if (bs) {
-        bs.textContent = '🗺 SCAN OFF';
-        bs.classList.remove('on');
-      }
+    // Gestionamos que el modo scan no se ponga false por defecto si estamos en modo baja calidad.
+    // Simplemente se mantiene tal como el usuario lo haya definido.
+    const bs = $('btn-scan');
+    if (bs) {
+      bs.textContent = this.scanOverlayEnabled ? '🗺 SCAN ON' : '🗺 SCAN OFF';
+      bs.classList.toggle('on', this.scanOverlayEnabled);
     }
 
-    if (!silent && this.voice.enabled) {
-      this.voice.speak(low
-        ? 'Modo de rendimiento bajo activado.'
-        : 'Modo de rendimiento alto activado.');
+    if (this.robotController && this.robotController.setPerformanceMode) {
+      this.robotController.setPerformanceMode(this.performanceMode);
     }
   }
 

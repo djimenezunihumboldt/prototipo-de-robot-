@@ -10,6 +10,46 @@ El proyecto ha sido **totalmente mejorado** con:
 - ✅ Lógica de decisión **inteligente y jerárquica**
 - ✅ Mejor rendimiento y estabilidad
 
+## ⚡ MEJORA #4: OPTIMIZACIÓN DE RENDIMIENTO EN ALTA CALIDAD (LOCAL)
+
+### Síntoma
+- En `CALIDAD: ALTA`, el simulador podía pegarse o bajar FPS de forma brusca en ejecución local.
+
+### Optimización aplicada
+
+#### 1) Escaneo del entorno más eficiente
+- Archivo: `js/robot-controller.js`
+- Se añadió `setPerformanceMode(mode)` para ajustar densidad y frecuencia de escaneo.
+- Nuevo escaneo adaptativo con:
+  - `scanInterval`
+  - `scanAngleStep`
+  - `scanRayCount`
+  - `scanRayWidth`
+  - `scanRayMax`
+
+Esto reduce raycasts costosos que no eran críticos para la colisión inmediata.
+
+#### 2) Loop visual ajustado por calidad
+- Archivo: `js/simulation.js`
+- ALTA ahora usa intervalos más balanceados:
+  - `rayUpdateInterval: 0.07`
+  - `pathDrawInterval: 0.14`
+  - `nnDrawInterval: 0.22`
+  - `hudInterval: 0.12`
+- BAJA mantiene un perfil de ahorro más agresivo.
+- `scanOverlayInterval` configurable por calidad.
+- El modo de rendimiento se sincroniza también con `RobotController`.
+
+#### 3) Carga GPU recortada en ALTA
+- Archivo: `index.html`
+- `pixelRatio` máximo en desktop bajado de `1.6` a `1.35`.
+- En low-power se fija a `1.0` para evitar saturación.
+
+### Impacto esperado
+- Menos congelamientos en ALTA.
+- FPS más estables en PCs locales.
+- Menor consumo de CPU/GPU sin degradación visual severa.
+
 ---
 
 ## 🧠 MEJORA #1: RED NEURONAL CON TENSORFLOW.JS
